@@ -34,3 +34,17 @@ export function daysUntil(dateStr) {
 export function initials(name) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
+
+export function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+export function greetingEmoji() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "☀️";
+  if (hour < 17) return "🌤️";
+  return "🌙";
+}

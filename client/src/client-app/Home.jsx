@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
-import { formatINR, formatDate, daysUntil } from "../shared/format.js";
+import { formatINR, formatDate, daysUntil, greeting, greetingEmoji } from "../shared/format.js";
 import { Bar, Photo } from "../shared/ui.jsx";
 
 export default function Home({ project, onProjectChange }) {
@@ -39,6 +39,7 @@ export default function Home({ project, onProjectChange }) {
 
   const daysLeft = daysUntil(project.handoverDate);
   const greetName = (user.name || "").split(" ")[0];
+  const greetEmoji = greetingEmoji();
   const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long" });
 
   return (
@@ -46,7 +47,7 @@ export default function Home({ project, onProjectChange }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div>
           <div className="ca-eyebrow">{today}</div>
-          <div className="serif" style={{ fontSize: 23, fontWeight: 600 }}>Good morning, {greetName} ☀️</div>
+          <div className="serif" style={{ fontSize: 23, fontWeight: 600 }}>{greeting()}, {greetName} {greetEmoji}</div>
         </div>
         <span onClick={() => navigate("chat")} style={{ position: "relative", cursor: "pointer", fontSize: 20 }}>
           💬{hasUnreadChat && <span style={{ position: "absolute", top: -3, right: -5, width: 9, height: 9, background: "var(--bad)", borderRadius: "50%" }} />}

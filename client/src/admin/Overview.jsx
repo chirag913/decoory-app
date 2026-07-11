@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
-import { formatINR } from "../shared/format.js";
+import { formatINR, greeting } from "../shared/format.js";
 import { Spinner } from "../shared/ui.jsx";
 
 function Stat({ label, value, sub }) {
@@ -42,7 +42,7 @@ export default function Overview() {
   return (
     <div>
       <div className="dk-eyebrow">{new Date().toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</div>
-      <h1 className="serif" style={{ fontSize: 28, fontWeight: 600, margin: "4px 0 20px" }}>Good morning, Decoory team</h1>
+      <h1 className="serif" style={{ fontSize: 28, fontWeight: 600, margin: "4px 0 20px" }}>{greeting()}, Decoory team</h1>
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
         <Stat label="Active projects" value={projects.length} sub={`${onTrack} on track · ${attention} needs attention`} />

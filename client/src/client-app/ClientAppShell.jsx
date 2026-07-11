@@ -48,6 +48,7 @@ export default function ClientAppShell() {
   return (
     <div className="ca-shell">
       <div className="ca-body">
+        <img src="/decoory-logo.png" alt="Decoory Interior's" style={{ height: 24, marginBottom: 16 }} />
         <Routes>
           <Route index element={<Home project={project} onProjectChange={reloadProject} />} />
           <Route path="updates" element={<Updates project={project} />} />
