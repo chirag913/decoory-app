@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.local
+*.db
+*.db-shm
+*.db-wal
+server/uploads/*
+!server/uploads/.gitkeep
+dist/
+build/
+.DS_Store
+android/app/build/
+android/.gradle/
+android/local.properties
+*.log
