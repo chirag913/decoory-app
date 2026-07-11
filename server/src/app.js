@@ -12,6 +12,7 @@ import documentsRoutes from "./routes/documents.js";
 import suggestionsRoutes from "./routes/suggestions.js";
 import reportsRoutes from "./routes/reports.js";
 import uploadsRoutes from "./routes/uploads.js";
+import devRoutes from "./routes/dev.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -36,6 +37,12 @@ app.use("/api/documents", documentsRoutes);
 app.use("/api/suggestions", suggestionsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/uploads", uploadsRoutes);
+
+// Time-travel / manual-trigger endpoints for exercising cron rules on
+// demand — never mounted in production (see routes/dev.js).
+if (process.env.NODE_ENV !== "production") {
+  app.use("/api/dev", devRoutes);
+}
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
