@@ -1,0 +1,17 @@
+{
+  "appId": "com.decoory.client",
+  "appName": "Decoory",
+  "webDir": "dist",
+  "backgroundColor": "#1E2622",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#1E2622",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    }
+  }
+}

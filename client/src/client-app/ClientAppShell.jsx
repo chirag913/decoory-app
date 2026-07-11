@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { Spinner } from "../shared/ui.jsx";
+import { registerPushNotifications } from "../shared/push.js";
 import Home from "./Home.jsx";
 import Updates from "./Updates.jsx";
 import Payments from "./Payments.jsx";
@@ -34,6 +35,7 @@ export default function ClientAppShell() {
   }, []);
 
   useEffect(() => { reloadProject(); }, [reloadProject]);
+  useEffect(() => { registerPushNotifications().catch((e) => console.error("Push setup failed:", e.message)); }, []);
 
   if (error) {
     return (

@@ -2,7 +2,7 @@
 
 Admin dashboard + client mobile app for Decoory Interior's, an Indian interior design company.
 
-**Status:** Phases 1-8 complete (backend API, client app, admin dashboard, file uploads, scheduler, AI estimation, Razorpay, Firebase push). The Android build comes next (see project task list).
+**Status:** Phases 1-9 complete (backend API, client app, admin dashboard, file uploads, scheduler, AI estimation, Razorpay, Firebase push, Android wrapper). Deployment docs land next (see project task list).
 
 ## Backend quick start
 
@@ -78,6 +78,26 @@ Since this environment has no real Razorpay test keys, the "absent" fallback pat
 This is server-side infrastructure only for now — registering an actual device needs `@capacitor/push-notifications`, which is installed alongside the Android project itself in Phase 9. Set `FCM_PROJECT_ID`/`FCM_CLIENT_EMAIL`/`FCM_PRIVATE_KEY` (a Firebase service account) to enable; without them `notify()` still creates in-app notifications exactly as before, `sendPushToUser` just returns `{ sent: 0 }`.
 
 `npm audit` flags 8 moderate findings after installing `firebase-admin` — all the same transitive `uuid` buffer-bounds advisory, several layers deep inside Google Cloud SDK internals (`google-gax`/`gaxios`/`teeny-request`) used only for internal request-id generation, never fed attacker-controlled input through this app's code paths. `npm audit fix --force` would "fix" it by downgrading `firebase-admin` to a pre-11 release, which is a worse trade — left as-is.
+
+## Android app (Capacitor)
+
+`client/android/` is a real, already-generated native project — app id `com.decoory.client`, app name "Decoory", ink-green (`#1E2622`) + brass (`#A8823C`) "D." launcher icon and splash screen (adaptive icon + legacy + round + dark-mode splash, all densities — generated from the vector sources in `client/assets-src/` via `npx capacitor-assets generate`, not hand-drawn per density). This environment has no JDK/Android SDK, so the actual `./gradlew assembleDebug` compile step has not been run here — everything up through `cap sync` has been verified (clean web build, plugins registered, assets in place).
+
+**Building the APK** (needs [Android Studio](https://developer.android.com/studio) installed, which bundles a JDK and the Android SDK):
+
+```bash
+cd client
+npm run build              # rebuild the web app into dist/
+npx cap sync android       # copy dist/ + plugin native code into the Android project
+cd android
+./gradlew assembleDebug    # Windows: gradlew.bat assembleDebug
+```
+
+The unsigned debug APK lands at `client/android/app/build/outputs/apk/debug/app-debug.apk` — installable directly on a device (`adb install app-debug.apk`) or shareable as-is for testing. Re-run `npm run build && npx cap sync android` after any client source change before rebuilding the APK — Capacitor doesn't watch for changes automatically.
+
+**Push notifications on the device** need a real Firebase project: download `google-services.json` from the Firebase console and place it at `client/android/app/google-services.json` (gitignored — it holds real project credentials) before building. Without it, the app still runs fine; `registerPushNotifications()` (`client/src/shared/push.js`) just won't have a working FCM backend to register against.
+
+**Production (signed, Play Store-ready) builds**, and handing the APK to clients without a store listing, are covered in the deployment docs below.
 
 ## Project structure
 
