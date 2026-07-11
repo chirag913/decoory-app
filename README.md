@@ -2,7 +2,7 @@
 
 Admin dashboard + client mobile app for Decoory Interior's, an Indian interior design company.
 
-**Status:** Phases 1-7 complete (backend API, client app, admin dashboard, file uploads, scheduler, AI estimation, Razorpay). Push notifications and the Android build come in subsequent phases (see project task list).
+**Status:** Phases 1-8 complete (backend API, client app, admin dashboard, file uploads, scheduler, AI estimation, Razorpay, Firebase push). The Android build comes next (see project task list).
 
 ## Backend quick start
 
@@ -70,6 +70,14 @@ Three endpoints, all guarded by ownership checks (a client can only act on their
 - `POST /api/webhooks/razorpay` — the server-side `payment.captured` path, for redundancy beyond the client-side verify call. Needs raw request bytes for its own HMAC check, so it's mounted in `app.js` *before* the global `express.json()` parser, using `express.raw()` instead.
 
 Since this environment has no real Razorpay test keys, the "absent" fallback path (and the admin's always-available "Mark as paid" manual action) is what's actually exercised end-to-end here; the checkout/verify/webhook code is written to Razorpay's documented signature scheme and covered by unit tests in `services/razorpay.test.js` (valid signature, tampered signature, replay with a different payment id, missing fields) — set real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET` to exercise the live checkout flow.
+
+## Firebase Cloud Messaging (push)
+
+`services/notify.js`'s `notify()` — the one function every automation and route uses to create an in-app notification — also fires a push in the same call (fire-and-forget, never blocks or throws on push failure). `services/push.js` sends to every device token the user has registered via `POST /api/push-tokens`, and prunes tokens FCM reports as unregistered (uninstalled app, expired token).
+
+This is server-side infrastructure only for now — registering an actual device needs `@capacitor/push-notifications`, which is installed alongside the Android project itself in Phase 9. Set `FCM_PROJECT_ID`/`FCM_CLIENT_EMAIL`/`FCM_PRIVATE_KEY` (a Firebase service account) to enable; without them `notify()` still creates in-app notifications exactly as before, `sendPushToUser` just returns `{ sent: 0 }`.
+
+`npm audit` flags 8 moderate findings after installing `firebase-admin` — all the same transitive `uuid` buffer-bounds advisory, several layers deep inside Google Cloud SDK internals (`google-gax`/`gaxios`/`teeny-request`) used only for internal request-id generation, never fed attacker-controlled input through this app's code paths. `npm audit fix --force` would "fix" it by downgrading `firebase-admin` to a pre-11 release, which is a worse trade — left as-is.
 
 ## Project structure
 
