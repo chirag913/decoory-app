@@ -141,7 +141,7 @@ Three endpoints, all guarded by ownership checks (a client can only act on their
 
 ## Android app (Capacitor)
 
-`client/android/` is a real, already-generated native project — app id `com.decoory.client`, app name "Decoory", ink-green (`#1E2622`) + brass (`#A8823C`) "D." launcher icon and splash screen (adaptive icon + legacy + round + dark-mode splash, all densities — generated from the vector sources in `client/assets-src/` via `npx capacitor-assets generate`).
+`client/android/` is a real, already-generated native project — app id `com.decoory.client`, app name "Decoory", launcher icon and splash screen built from the real Decoory logo (`client/assets-src/logo.png`, extracted from `logo-original-source.jpeg`) on a paper (`#F4F2EC`) background, chosen because the logo's own dark wordmark has poor contrast on the ink-green surfaces used elsewhere — adaptive icon + legacy + round + dark-mode splash, all densities, generated via `npx capacitor-assets generate`. The wide banner-shaped logo needed the adaptive icon's foreground/background layers supplied separately (`icon-foreground.png`/`icon-background.png`) rather than a single flat `icon.png` — the tool's auto-crop-to-content-bounds heuristic badly over-zooms a short, wide source when deriving one from a flat image; the legacy (pre-Android-8) icon is composited from the same two layers directly rather than through that heuristic. Same logo now appears on the Login screen and (on a light paper badge for contrast) the admin sidebar.
 
 ```bash
 cd client

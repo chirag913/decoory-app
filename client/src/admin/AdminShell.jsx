@@ -29,12 +29,12 @@ export default function AdminShell() {
   return (
     <div className="dk-root">
       <aside className="dk-side">
-        <div style={{ padding: "4px 12px 22px" }}>
-          <div className="serif" style={{ fontSize: 19, fontWeight: 600, letterSpacing: ".01em" }}>
-            Decoory<span style={{ color: "var(--brass)" }}>.</span>
+        <div style={{ padding: "8px 12px 22px" }}>
+          <div style={{ background: "var(--paper)", borderRadius: 8, padding: "9px 10px", display: "inline-block", maxWidth: "100%" }}>
+            <img src="/decoory-logo.png" alt="Decoory Interior's" style={{ width: "100%", maxWidth: 150, height: "auto", display: "block" }} />
           </div>
-          <div className="lbl" style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "#8E8A7C", marginTop: 2 }}>
-            Interior's · Admin
+          <div className="lbl" style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "#8E8A7C", marginTop: 8 }}>
+            Admin
           </div>
         </div>
         {NAV.map(([path, icon, label]) => (

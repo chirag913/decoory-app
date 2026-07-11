@@ -36,12 +36,7 @@ export default function Login() {
   return (
     <div style={{ minHeight: "100dvh", background: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div className="ca-card" style={{ width: "100%", maxWidth: 380, padding: 26 }}>
-        <div className="serif" style={{ fontSize: 26, fontWeight: 600 }}>
-          Decoory<span style={{ color: "var(--brass)" }}>.</span>
-        </div>
-        <div style={{ fontSize: 11.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--mut)", marginTop: 2, marginBottom: 22 }}>
-          Interior's
-        </div>
+        <img src="/decoory-logo.png" alt="Decoory Interior's" style={{ height: 34, marginBottom: 22 }} />
 
         <div style={{ display: "flex", gap: 6, marginBottom: 18, background: "var(--paper)", borderRadius: 10, padding: 4 }}>
           <button type="button" onClick={() => setMode("password")}
