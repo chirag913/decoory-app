@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/client.js";
 import { formatDate } from "../../shared/format.js";
 import { Photo, Spinner } from "../../shared/ui.jsx";
+import { whatsappUpdateLink } from "../../shared/contact.js";
 
 export default function UpdatesTab({ project }) {
   const [updates, setUpdates] = useState(null);
@@ -9,6 +10,7 @@ export default function UpdatesTab({ project }) {
   const [files, setFiles] = useState([]);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
+  const [justPublished, setJustPublished] = useState(null);
   const fileRef = useRef(null);
 
   const load = () => api.get(`/projects/${project.id}/updates`).then(({ updates }) => setUpdates(updates));
@@ -36,6 +38,7 @@ export default function UpdatesTab({ project }) {
         }
       }
       await api.post(`/projects/${project.id}/updates`, { date: new Date().toISOString().slice(0, 10), items, media });
+      setJustPublished(items);
       setText("");
       setFiles([]);
       load();
@@ -63,6 +66,17 @@ export default function UpdatesTab({ project }) {
             {publishing ? "Publishing…" : "Publish update — client gets notified"}
           </button>
         </div>
+        {justPublished && (
+          <div style={{ marginTop: 10 }}>
+            <a
+              className="dk-btn ghost" style={{ display: "inline-block", textDecoration: "none" }}
+              href={whatsappUpdateLink({ clientName: project.client.name, clientPhone: project.client.phone, projectName: project.name, projectCode: project.code, items: justPublished })}
+              target="_blank" rel="noreferrer"
+            >
+              Also notify {project.client.name} on WhatsApp
+            </a>
+          </div>
+        )}
       </div>
 
       {updates.map((u) => (
@@ -72,7 +86,16 @@ export default function UpdatesTab({ project }) {
             <span style={{ width: 1, flex: 1, background: "var(--line)" }} />
           </div>
           <div style={{ paddingBottom: 18, flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 13.5 }}>{formatDate(u.date)}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 13.5 }}>{formatDate(u.date)}</div>
+              <a
+                href={whatsappUpdateLink({ clientName: project.client.name, clientPhone: project.client.phone, projectName: project.name, projectCode: project.code, items: u.items })}
+                target="_blank" rel="noreferrer"
+                style={{ fontSize: 11.5, color: "var(--brass)", fontWeight: 600, textDecoration: "none" }}
+              >
+                Notify on WhatsApp
+              </a>
+            </div>
             <ul style={{ margin: "6px 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.55 }}>
               {u.items.map((it, i) => <li key={i}>{it}</li>)}
             </ul>

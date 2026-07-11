@@ -139,14 +139,6 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
-CREATE TABLE IF NOT EXISTS push_tokens (
-  id          TEXT PRIMARY KEY,
-  user_id     TEXT NOT NULL REFERENCES users(id),
-  token       TEXT NOT NULL UNIQUE,
-  platform    TEXT NOT NULL DEFAULT 'android',
-  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-);
-
 CREATE INDEX IF NOT EXISTS idx_daily_updates_project ON daily_updates(project_id);
 CREATE INDEX IF NOT EXISTS idx_payments_project ON payments(project_id);
 CREATE INDEX IF NOT EXISTS idx_materials_project ON materials(project_id);

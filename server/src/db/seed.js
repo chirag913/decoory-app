@@ -9,7 +9,7 @@ import { BRAND_INFO } from "../config/brands.js";
 const DEV_PASSWORD = "decoory123";
 
 const TABLES_IN_DELETE_ORDER = [
-  "notifications", "messages", "suggestions", "push_tokens",
+  "notifications", "messages", "suggestions",
   "update_media", "daily_updates", "payments", "materials",
   "project_team", "team_members", "leads", "documents",
   "projects", "users",

@@ -10,14 +10,3 @@ dist/
 build/
 .DS_Store
 *.log
-
-# Android (client/android/.gitignore already covers build/, .gradle/, local.properties
-# for anything under client/android/ — this repo-root file can't reach that deep with
-# slash-containing patterns). google-services.json holds real Firebase project
-# credentials once added, so keep it local rather than committing it.
-**/google-services.json
-
-# Android Studio's local project settings (window layout, local run
-# configs) — not shared project config, machine-specific IDE state.
-**/.idea/
-*.iml

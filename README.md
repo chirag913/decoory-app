@@ -2,7 +2,7 @@
 
 Admin dashboard + client mobile app for Decoory Interior's, an Indian interior design company — keeps homeowners updated on their project from design to handover, and gives the Decoory team one place to run every active site.
 
-Two faces, one codebase: an admin web dashboard and a client mobile app (Android APK via Capacitor), role-routed from a single React app. Design tokens match the two prototypes exactly: ink green `#1E2622`, warm paper `#F4F2EC`, brass `#A8823C`, brass-soft `#F0E7D2`, Fraunces for display headings, Archivo for UI text.
+Two faces, one codebase: an admin web dashboard and a client mobile app (installable as a PWA — "Add to Home Screen", no app store), role-routed from a single React app. Design tokens match the two prototypes exactly: ink green `#1E2622`, warm paper `#F4F2EC`, brass `#A8823C`, brass-soft `#F0E7D2`, Fraunces for display headings, Archivo for UI text.
 
 ## Quick start
 
@@ -36,7 +36,6 @@ All in `server/.env.example`. None are required for local dev — see the fallba
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Production Postgres + Storage | Local SQLite + local disk uploads |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | AI budget estimates + 10-day upsell suggestions | Rule-based rate-card estimator and rotating suggestion templates |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Backend Razorpay endpoints (implemented, not currently called by the client UI — see "Payment collection" below) | No effect on the app today; admin's "Mark as paid" is the only payment-completion path in current use |
-| `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` | Push notifications | In-app notifications still work; push is just skipped |
 
 ## Testing
 
@@ -77,24 +76,20 @@ Either way:
 
 ### 3. Client — same server, or split
 
-`client/` is a static Vite build (`npm run build` → `client/dist/`) that talks to the API via same-origin `/api/*` and `/uploads/*` requests (see `client/vite.config.js`'s dev proxy). Two ways to make that resolve in production: serve `client/dist/` as static files from the same Express app (`express.static` — simplest, no CORS/proxy config needed) or, if hosting the web build separately (e.g. Vercel), set `VITE_API_URL` (`client/.env.example`) to the deployed backend's absolute URL as an env var before the build runs. **The Android app always needs `VITE_API_URL` set** regardless of how the web build is hosted — its WebView has no same-origin backend to fall back to (see "Handing the APK to clients" below).
+`client/` is a static Vite build (`npm run build` → `client/dist/`) that talks to the API via same-origin `/api/*` and `/uploads/*` requests (see `client/vite.config.js`'s dev proxy). Two ways to make that resolve in production: serve `client/dist/` as static files from the same Express app (`express.static` — simplest, no CORS/proxy config needed) or, if hosting the web build separately (e.g. Vercel), set `VITE_API_URL` (`client/.env.example`) to the deployed backend's absolute URL as an env var before the build runs.
 
 **On Vercel specifically**, set Root Directory to `client` and add `VITE_API_URL` under Environment Variables before the first deploy. `client/vercel.json` adds the SPA fallback rewrite every client-side-routed React app needs there (`/(.*)→/index.html`) — without it, any URL besides the bare domain root 404s, since Vercel's static file server looks for a literal file at that path (there isn't one; React Router handles `/admin`, `/login`, etc. only after `index.html` loads).
 
-### 4. Handing the APK to clients
+### 4. Installing the client as a PWA
 
-No Play Store listing needed for this use case — Decoory hands the APK directly:
+No app store, no APK to hand around — clients install straight from the browser:
 
-1. Build a **release** APK (not the debug one from local dev): in `client/android`, `./gradlew assembleRelease`, signed with a real keystore (`keytool -genkey -v -keystore decoory-release.keystore -alias decoory -keyalg RSA -keysize 2048 -validity 10000`, then configure `android/app/build.gradle`'s `signingConfigs` to use it — Capacitor's default project has a `release` build type ready for this).
-2. **Before building, set `VITE_API_URL`** (`client/.env.example`) to a real, network-reachable server URL — a deployed backend, or your machine's LAN IP for local testing on a phone over the same WiFi (e.g. `http://192.168.1.5:4000`, found via `ipconfig`). This is required, not optional: the app's `/api/*` and `/uploads/*` calls are relative paths that only resolve inside a browser (Vite's dev proxy) or a same-origin production deploy — the Capacitor WebView has neither, so without this the installed app loads fine but every login/data fetch fails silently. Then rebuild before syncing:
-   ```bash
-   cd client
-   echo VITE_API_URL=http://192.168.1.5:4000 > .env.local   # your own IP/URL
-   npm run build && npx cap sync android
-   ```
-   Windows Firewall may prompt to allow inbound connections on your API port the first time a phone on the LAN reaches it — allow it, or the phone's requests will time out even though `curl` from the same machine works.
-3. Host the resulting `app-release.apk` somewhere clients can download it from a phone browser (a private link — Supabase Storage, a Drive link, an S3 bucket) and send that link. Android will prompt to allow installs from that source ("unknown sources") the first time — expected for a non-Play-Store APK.
-4. Each client logs in with the project-code + PIN issued at booking, or their email/phone + password — no separate account setup needed.
+1. Open the deployed client URL on a phone (Chrome on Android, Safari on iOS) and log in with the project-code + PIN issued at booking, or their email/phone + password.
+2. **Android/Chrome:** the browser shows an "Install app" / "Add to Home Screen" prompt automatically (or via the ⋮ menu). **iOS/Safari:** Share → "Add to Home Screen" (Safari doesn't auto-prompt).
+3. The installed icon launches the app full-screen, no browser chrome, using the manifest/icons in `client/public/` (`manifest.webmanifest`, `pwa-192.png`, `pwa-512.png`, `pwa-maskable-512.png`, `apple-touch-icon.png` — all generated from `client/assets-src/logo.png` on the paper `#F4F2EC` background, same reasoning as the sidebar badge: the logo's dark wordmark needs a light surface for contrast).
+4. `client/public/sw.js` is a minimal service worker whose only job is satisfying the browser's installability requirement (an active service worker with a fetch handler) — it does no caching by design, since this app changes daily (updates, payments, chat) and caching the shell risks showing stale data after a deploy.
+
+No `VITE_API_URL` gotcha to worry about here — a PWA is just the same web app running in a browser tab, so it always has the same-origin (or configured `VITE_API_URL`) backend the web build already resolves.
 
 ## Media & seed photos
 
@@ -149,23 +144,9 @@ Three endpoints, all guarded by ownership checks (a client can only act on their
 - `POST /api/payments/:id/verify` — verifies the HMAC-SHA256 signature Razorpay's Checkout.js success handler returns (`services/razorpay.js`) before calling the same `markPaid()` the admin's manual fallback uses.
 - `POST /api/webhooks/razorpay` — the server-side `payment.captured` path. Needs raw request bytes for its own HMAC check, so it's mounted in `app.js` *before* the global `express.json()` parser, using `express.raw()` instead.
 
-## Firebase Cloud Messaging (push)
+## Update notifications: WhatsApp, not push
 
-`services/notify.js`'s `notify()` — the one function every automation and route uses to create an in-app notification — also fires a push in the same call (fire-and-forget, never blocks or throws on push failure). `services/push.js` sends to every device token the user has registered via `POST /api/push-tokens`, and prunes tokens FCM reports as unregistered (uninstalled app, expired token). Client-side registration (`client/src/shared/push.js`) is gated on `Capacitor.isNativePlatform()`, so it's a total no-op in the browser and only actually registers on the Android app.
-
-## Android app (Capacitor)
-
-`client/android/` is a real, already-generated native project — app id `com.decoory.client`, app name "Decoory", launcher icon and splash screen built from the real Decoory logo (`client/assets-src/logo.png`, extracted from `logo-original-source.jpeg`) on a paper (`#F4F2EC`) background, chosen because the logo's own dark wordmark has poor contrast on the ink-green surfaces used elsewhere — adaptive icon + legacy + round + dark-mode splash, all densities, generated via `npx capacitor-assets generate`. The wide banner-shaped logo needed the adaptive icon's foreground/background layers supplied separately (`icon-foreground.png`/`icon-background.png`) rather than a single flat `icon.png` — the tool's auto-crop-to-content-bounds heuristic badly over-zooms a short, wide source when deriving one from a flat image; the legacy (pre-Android-8) icon is composited from the same two layers directly rather than through that heuristic. Same logo now appears on the Login screen and (on a light paper badge for contrast) the admin sidebar.
-
-```bash
-cd client
-npm run build              # rebuild the web app into dist/
-npx cap sync android       # copy dist/ + plugin native code into the Android project
-cd android
-./gradlew assembleDebug    # Windows: gradlew.bat assembleDebug
-```
-
-The debug APK normally lands at `client/android/app/build/outputs/apk/debug/app-debug.apk` — on at least one confirmed build it landed at `.../app/build/intermediates/apk/debug/app-debug.apk` instead (AGP version-dependent); if the first path is empty after a successful build, check the second. Needs [Android Studio](https://developer.android.com/studio) installed (bundles the JDK + Android SDK) — see "Handing the APK to clients" above for the release-build/signing steps, and **"Client — same server, or split" above for `VITE_API_URL`, required for the app to reach the API at all**. Push notifications on-device additionally need `google-services.json` from a real Firebase project, placed at `client/android/app/google-services.json` (gitignored).
+There's no push infrastructure — the client is a PWA with no way to register a device token for background delivery, so `services/notify.js`'s `notify()` only ever creates the in-app notification row (bell icon, polled by the client). To actually reach a client the moment an update is published, `UpdatesTab.jsx` (admin → project → Daily updates) shows a **"Notify on WhatsApp"** link next to every published update — a `wa.me` deep link (`client/src/shared/contact.js`'s `whatsappUpdateLink()`) that opens WhatsApp with the client's own number and a pre-filled message summarizing that day's update. It's a plain link the admin taps to manually send — no API, no credentials, no automated messages — same pattern as the payment-collection WhatsApp link below, and consistent with the spec's exclusion of automated WhatsApp integration.
 
 ## Creating and deleting projects
 
@@ -178,13 +159,13 @@ The debug APK normally lands at `client/android/app/build/outputs/apk/debug/app-
 ```
 server/           Express API, SQLite DB (node:sqlite), seed script, scheduler
   src/routes/      One file per resource — the REST surface
-  src/services/    Business logic: notify, push, storage, anthropic, razorpay, jobs, scheduler
+  src/services/    Business logic: notify, storage, anthropic, razorpay, jobs, scheduler
   src/config/      Rate card + brand catalog (rule-based estimator inputs)
   src/utils/       Pure helpers — money formatting, the tested reminder-window logic, dev clock
 client/           React + Vite app — single codebase, role-based routing
   src/admin/       Admin dashboard screens
   src/client-app/  Client mobile app screens
   src/public/      Public self-estimation screen (no login)
-  src/shared/      Design tokens, UI primitives, WhatsApp/push helpers shared by both faces
-  android/         Capacitor Android native project
+  src/shared/      Design tokens, UI primitives, WhatsApp deep-link helpers shared by both faces
+  public/          PWA manifest, service worker, icons
 ```

@@ -10,3 +10,13 @@ export function whatsappPaymentLink({ projectName, projectCode, label, amountTex
   const text = `Hi Decoory team, I'd like to pay for ${projectName} (${projectCode}) — ${label}, ${amountText}. Please share a payment link.`;
   return `https://wa.me/${DECOORY_WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
 }
+
+// Admin-side: after publishing a daily update, open a chat with the client's
+// own WhatsApp number (not Decoory's) so the admin can manually forward the
+// news. Same manual wa.me pattern — no API, no automated send.
+export function whatsappUpdateLink({ clientName, clientPhone, projectName, projectCode, items }) {
+  const digits = (clientPhone || "").replace(/[^\d]/g, "");
+  const bullet = items.map((it) => `• ${it}`).join("\n");
+  const text = `Hi ${clientName}, here's today's update on ${projectName} (${projectCode}):\n\n${bullet}\n\nYou can view photos and full details in the Decoory app.`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}
