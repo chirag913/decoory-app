@@ -12,6 +12,7 @@ import documentsRoutes from "./routes/documents.js";
 import suggestionsRoutes from "./routes/suggestions.js";
 import reportsRoutes from "./routes/reports.js";
 import uploadsRoutes from "./routes/uploads.js";
+import estimateRoutes from "./routes/estimate.js";
 import devRoutes from "./routes/dev.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,7 @@ app.use("/api/documents", documentsRoutes);
 app.use("/api/suggestions", suggestionsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/uploads", uploadsRoutes);
+app.use("/api/estimate", estimateRoutes);
 
 // Time-travel / manual-trigger endpoints for exercising cron rules on
 // demand — never mounted in production (see routes/dev.js).

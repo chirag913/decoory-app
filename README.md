@@ -2,7 +2,7 @@
 
 Admin dashboard + client mobile app for Decoory Interior's, an Indian interior design company.
 
-**Status:** Phases 1-5 complete (backend API, client app, admin dashboard, file uploads, scheduler). AI estimation, Razorpay, push, and the Android build come in subsequent phases (see project task list).
+**Status:** Phases 1-6 complete (backend API, client app, admin dashboard, file uploads, scheduler, AI estimation). Razorpay, push, and the Android build come in subsequent phases (see project task list).
 
 ## Backend quick start
 
@@ -56,6 +56,10 @@ curl -X POST localhost:4000/api/dev/time/reset
 ```
 
 The cron schedule itself still fires on the real wall clock; these endpoints let you fast-forward `now()` and invoke a job function directly, bypassing the wait.
+
+## AI budget estimation
+
+`POST /api/estimate` is public (no auth) — it's the backend for the "Free budget estimate" screen at `/estimate`, reachable without logging in from the Login screen. It calls `services/anthropic.js`'s `estimateBudget()`, which uses Claude when `ANTHROPIC_API_KEY` is set, or falls back to a deterministic rate-card calculation (`config/rateCard.js`: ₹/sqft by room type × a city cost multiplier) when it's absent or the AI call/JSON-parse fails. Either path returns the same shape — an estimate range, 2-5 suggested brands (from the same six-brand catalog projects use, `config/brands.js`), and a timeline — and every submission is saved as a `leads` row (`source: 'self-estimation'`) with the full form as `search_data`, notifying all admins.
 
 ## Project structure
 

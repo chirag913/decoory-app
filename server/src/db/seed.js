@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import db from "./index.js";
 import { rupeesToPaise } from "../utils/money.js";
+import { BRAND_INFO } from "../config/brands.js";
 
 const DEV_PASSWORD = "decoory123";
 
@@ -205,14 +206,6 @@ function run() {
 
   // ── Materials ──
   const insertMaterial = db.prepare(`INSERT INTO materials (id, project_id, brand, used_for, tagline) VALUES (?,?,?,?,?)`);
-  const BRAND_INFO = {
-    "Century Ply": { used_for: "BWP plywood — kitchen & wardrobes", tagline: "Waterproof · 8-yr warranty" },
-    "Action TESA": { used_for: "Laminates & veneer finishes", tagline: "Premium laminates" },
-    "Hafele": { used_for: "Kitchen hardware & soft-close hinges", tagline: "German engineering" },
-    "Hettich": { used_for: "Drawer channels & sliding systems", tagline: "50,000-cycle tested" },
-    "Virgo": { used_for: "Laminates — living room panels", tagline: "Scratch resistant" },
-    "Kwalit": { used_for: "Interior wall paints & finishes", tagline: "Trusted paint finishes" },
-  };
   const MATERIALS = {
     "DCR-101": ["Century Ply", "Hafele", "Virgo", "Hettich"],
     "DCR-102": ["Action TESA", "Hettich", "Century Ply"],
