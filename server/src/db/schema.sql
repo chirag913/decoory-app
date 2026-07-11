@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   email         TEXT UNIQUE,
   phone         TEXT UNIQUE,
   password_hash TEXT NOT NULL,
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS projects (
   today_plan      TEXT DEFAULT '',
   today_team      TEXT DEFAULT '',
   pin             TEXT,                          -- PIN issued at booking, paired with `code` for client login
-  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS daily_updates (
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS daily_updates (
   project_id   TEXT NOT NULL REFERENCES projects(id),
   update_date  TEXT NOT NULL,                    -- date the work happened
   items        TEXT NOT NULL,                    -- JSON array of strings
-  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS update_media (
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS update_media (
   update_id   TEXT NOT NULL REFERENCES daily_updates(id),
   file_path   TEXT NOT NULL,
   kind        TEXT NOT NULL CHECK (kind IN ('photo','video')),
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS payments (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS payments (
   reminder_sent_at  TEXT,
   razorpay_order_id TEXT,
   razorpay_payment_id TEXT,
-  created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS team_members (
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS team_members (
   phone       TEXT,
   photo_path  TEXT,
   note        TEXT,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS project_team (
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS leads (
   source                TEXT NOT NULL CHECK (source IN ('self-estimation','design-upload','manual')),
   status                TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','contacted','qualified')),
   search_data           TEXT,                     -- JSON blob of everything the user entered
-  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS messages (
   text             TEXT,
   attachment_path  TEXT,
   read_at          TEXT,
-  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS notifications (
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   type        TEXT NOT NULL,                       -- morning_brief | update | payment_due | payment_thanks | suggestion | brand | chat | lead
   data        TEXT,                                -- JSON: e.g. { projectId }
   read        INTEGER NOT NULL DEFAULT 0,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS suggestions (
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS suggestions (
   description  TEXT NOT NULL,
   price_note   TEXT,
   status       TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent','interested','dismissed')),
-  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS documents (
   section_key TEXT NOT NULL UNIQUE,   -- warranty | payment_terms | material_policy | timeline_rules | change_requests | service_terms | usp
   title       TEXT NOT NULL,
   body        TEXT NOT NULL,          -- plain text, or JSON array for usp checklist
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS push_tokens (
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS push_tokens (
   user_id     TEXT NOT NULL REFERENCES users(id),
   token       TEXT NOT NULL UNIQUE,
   platform    TEXT NOT NULL DEFAULT 'android',
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_daily_updates_project ON daily_updates(project_id);

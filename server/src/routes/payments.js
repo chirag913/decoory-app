@@ -59,7 +59,7 @@ export function markPaid(paymentId, { razorpayOrderId, razorpayPaymentId } = {})
   const row = db.prepare("SELECT * FROM payments WHERE id = ?").get(paymentId);
   if (!row || row.status === "paid") return;
   db.prepare(`
-    UPDATE payments SET status = 'paid', paid_at = datetime('now'),
+    UPDATE payments SET status = 'paid', paid_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
       razorpay_order_id = COALESCE(@razorpayOrderId, razorpay_order_id),
       razorpay_payment_id = COALESCE(@razorpayPaymentId, razorpay_payment_id)
     WHERE id = @id

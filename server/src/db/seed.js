@@ -41,7 +41,10 @@ function explicitMedia(entries) {
   return entries.map(([c1, c2, caption]) => ({ path: `placeholder://${c1.slice(1)}-${c2.slice(1)}`, caption }));
 }
 
-const ist = (dateStr, time = "18:00:00") => `${dateStr}T${time}+05:30`;
+// Wall-clock IST instant, normalized to the same sortable UTC "Z" format
+// the schema's runtime defaults use (see server README "Timestamp format") —
+// mixing offset styles as raw strings breaks lexicographic ORDER BY.
+const ist = (dateStr, time = "18:00:00") => new Date(`${dateStr}T${time}+05:30`).toISOString();
 
 function run() {
   wipe();

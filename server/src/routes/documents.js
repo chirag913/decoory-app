@@ -16,7 +16,7 @@ router.patch("/:key", requireAuth, requireRole("admin"), (req, res) => {
   if (!row) return res.status(404).json({ error: "Document not found" });
   const { title, body } = req.body;
   const bodyStr = row.section_key === "usp" && Array.isArray(body) ? JSON.stringify(body) : body;
-  db.prepare("UPDATE documents SET title = COALESCE(@title, title), body = COALESCE(@body, body), updated_at = datetime('now') WHERE section_key = @key")
+  db.prepare("UPDATE documents SET title = COALESCE(@title, title), body = COALESCE(@body, body), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE section_key = @key")
     .run(normalizeParams({ title, body: bodyStr, key: row.section_key }));
   res.json({ document: S.document(db.prepare("SELECT * FROM documents WHERE section_key = ?").get(row.section_key)) });
 });

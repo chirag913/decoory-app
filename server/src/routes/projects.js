@@ -164,7 +164,7 @@ router.post("/:id/messages", requireAuth, (req, res) => {
       // A reference-design upload from chat doubles as a CRM activity signal.
       db.prepare(`
         INSERT INTO leads (id, name, city, phone, scope, source, status, search_data, created_at)
-        VALUES (?,?,?,?,?,'design-upload','contacted',?,datetime('now'))
+        VALUES (?,?,?,?,?,'design-upload','contacted',?,strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       `).run(uuid(), req.user.name, null, req.user.phone, `Reference design shared in chat — ${project.name}`,
         JSON.stringify({ projectId: project.id, attachmentPath }));
     }
