@@ -165,6 +165,10 @@ cd android
 
 The debug APK normally lands at `client/android/app/build/outputs/apk/debug/app-debug.apk` — on at least one confirmed build it landed at `.../app/build/intermediates/apk/debug/app-debug.apk` instead (AGP version-dependent); if the first path is empty after a successful build, check the second. Needs [Android Studio](https://developer.android.com/studio) installed (bundles the JDK + Android SDK) — see "Handing the APK to clients" above for the release-build/signing steps, and **"Client — same server, or split" above for `VITE_API_URL`, required for the app to reach the API at all**. Push notifications on-device additionally need `google-services.json` from a real Firebase project, placed at `client/android/app/google-services.json` (gitignored).
 
+## Deleting records
+
+`DELETE /api/projects/:id`, `/api/leads/:id`, and `/api/team-members/:id` — reachable from the admin dashboard (Projects/Clients cards, a lead's detail drawer, a team member's card) behind a confirm dialog. Deleting a project cascades to everything scoped to it (updates, media, payments, team assignments, materials, suggestions, messages) in one transaction — SQLite enforces foreign keys here, so children have to go first — but **does not** delete the client's user account, so they keep their login even with no active project. There's currently no "create a new project" flow (projects only come from the seed script), so deleting one of the 3 seeded projects removes it permanently with no in-app way to add a replacement — ask if you want that built.
+
 ## Project structure
 
 ```

@@ -42,7 +42,7 @@ function AddLeadForm({ onAdded, onClose }) {
   );
 }
 
-function LeadDrawer({ lead, onClose, onStatusChange }) {
+function LeadDrawer({ lead, onClose, onStatusChange, onDelete }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(30,38,34,.4)", zIndex: 100, display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
       <div className="dk-card" style={{ width: 420, maxWidth: "90vw", height: "100%", borderRadius: 0, padding: 24, overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
@@ -51,7 +51,10 @@ function LeadDrawer({ lead, onClose, onStatusChange }) {
             <div className="dk-eyebrow">{lead.source.replace("-", " ")}</div>
             <div className="serif" style={{ fontSize: 20, fontWeight: 600, marginTop: 2 }}>{lead.name}</div>
           </div>
-          <button className="dk-btn ghost" onClick={onClose}>✕</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="dk-btn ghost" style={{ color: "var(--bad)" }} onClick={() => onDelete(lead)}>Delete</button>
+            <button className="dk-btn ghost" onClick={onClose}>✕</button>
+          </div>
         </div>
 
         <div style={{ marginTop: 16, fontSize: 13, lineHeight: 1.8 }}>
@@ -99,6 +102,13 @@ export default function Leads() {
     setOpenLead(lead);
   };
 
+  const removeLead = async (lead) => {
+    if (!window.confirm(`Delete the lead for ${lead.name}? This cannot be undone.`)) return;
+    await api.del(`/leads/${lead.id}`);
+    setLeads((ls) => ls.filter((l) => l.id !== lead.id));
+    setOpenLead(null);
+  };
+
   if (!leads) return <Spinner />;
 
   return (
@@ -138,7 +148,7 @@ export default function Leads() {
         </table>
       </div>
 
-      {openLead && <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStatusChange={setStatus} />}
+      {openLead && <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStatusChange={setStatus} onDelete={removeLead} />}
     </div>
   );
 }

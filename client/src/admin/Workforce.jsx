@@ -51,6 +51,12 @@ function MemberCard({ member, onUpdated }) {
     }
   };
 
+  const remove = async () => {
+    if (!window.confirm(`Remove ${member.name} from the workforce? They'll be unassigned from every project. This cannot be undone.`)) return;
+    await api.del(`/team-members/${member.id}`);
+    onUpdated();
+  };
+
   if (editing) {
     return (
       <div className="dk-card" style={{ padding: 16 }}>
@@ -70,9 +76,12 @@ function MemberCard({ member, onUpdated }) {
     <div className="dk-card" style={{ padding: 16, display: "flex", gap: 12 }}>
       <Avatar name={member.name} />
       <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
           <div style={{ fontWeight: 700, fontSize: 13.5 }}>{member.name}</div>
-          <span onClick={() => setEditing(true)} style={{ fontSize: 11.5, color: "var(--brass)", cursor: "pointer", fontWeight: 600 }}>Edit</span>
+          <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+            <span onClick={() => setEditing(true)} style={{ fontSize: 11.5, color: "var(--brass)", cursor: "pointer", fontWeight: 600 }}>Edit</span>
+            <span onClick={remove} style={{ fontSize: 11.5, color: "var(--bad)", cursor: "pointer", fontWeight: 600 }}>Remove</span>
+          </div>
         </div>
         <div style={{ fontSize: 12.5, color: "var(--mut)" }}>{member.role}</div>
         <div style={{ fontSize: 12, color: "var(--mut)", marginTop: 4 }}>On: {member.projects.length ? member.projects.map((p) => p.code).join(", ") : "Unassigned"}</div>

@@ -8,9 +8,15 @@ export default function Projects() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState(null);
 
-  useEffect(() => {
-    api.get("/projects").then(({ projects }) => setProjects(projects));
-  }, []);
+  const load = () => api.get("/projects").then(({ projects }) => setProjects(projects));
+  useEffect(() => { load(); }, []);
+
+  const remove = async (e, p) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete ${p.name} (${p.code})? This removes all its updates, payments, and messages permanently. The client's login stays intact. This cannot be undone.`)) return;
+    await api.del(`/projects/${p.id}`);
+    load();
+  };
 
   if (!projects) return <Spinner />;
 
@@ -26,7 +32,10 @@ export default function Projects() {
                 <div className="serif" style={{ fontSize: 19, fontWeight: 600, marginTop: 2 }}>{p.name}</div>
                 <div style={{ fontSize: 12.5, color: "var(--mut)" }}>{p.type}</div>
               </div>
-              <Chip status={p.health} />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <Chip status={p.health} />
+                <span onClick={(e) => remove(e, p)} title="Delete project" style={{ fontSize: 13, color: "var(--mut)", cursor: "pointer", padding: 2 }}>✕</span>
+              </div>
             </div>
             <div style={{ margin: "14px 0 6px", display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
               <span style={{ color: "var(--mut)" }}>{p.currentStage}</span><b>{p.progressPct}%</b>

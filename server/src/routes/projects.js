@@ -174,4 +174,30 @@ router.post("/:id/messages", requireAuth, (req, res) => {
   res.status(201).json({ message: S.message(db.prepare("SELECT * FROM messages WHERE id = ?").get(id)) });
 });
 
+// Deletes a project and everything scoped to it. Does NOT delete the
+// client's user account (they may get re-assigned a new project later) —
+// only the project and its own data. SQLite enforces foreign keys here
+// (PRAGMA foreign_keys = ON, db/index.js), so children must go first.
+router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+
+  const del = db.transaction((projectId) => {
+    const updateIds = db.prepare("SELECT id FROM daily_updates WHERE project_id = ?").all(projectId).map((r) => r.id);
+    const delMedia = db.prepare("DELETE FROM update_media WHERE update_id = ?");
+    for (const uid of updateIds) delMedia.run(uid);
+
+    db.prepare("DELETE FROM daily_updates WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM payments WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM project_team WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM materials WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM suggestions WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM messages WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
+  });
+  del(project.id);
+
+  res.status(204).end();
+});
+
 export default router;

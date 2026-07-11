@@ -40,4 +40,10 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   res.json({ lead: S.lead(db.prepare("SELECT * FROM leads WHERE id = ?").get(row.id)) });
 });
 
+router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {
+  const result = db.prepare("DELETE FROM leads WHERE id = ?").run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: "Lead not found" });
+  res.status(204).end();
+});
+
 export default router;

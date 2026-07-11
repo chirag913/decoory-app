@@ -7,9 +7,14 @@ export default function Clients() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState(null);
 
-  useEffect(() => {
-    api.get("/projects").then(({ projects }) => setProjects(projects));
-  }, []);
+  const load = () => api.get("/projects").then(({ projects }) => setProjects(projects));
+  useEffect(() => { load(); }, []);
+
+  const remove = async (p) => {
+    if (!window.confirm(`Delete ${p.client.name}'s project (${p.name}, ${p.code})? This removes all its updates, payments, and messages permanently. Their login stays intact. This cannot be undone.`)) return;
+    await api.del(`/projects/${p.id}`);
+    load();
+  };
 
   if (!projects) return <Spinner />;
 
@@ -29,6 +34,7 @@ export default function Clients() {
             <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
               <button className="dk-btn ghost" onClick={() => navigate(`../projects/${p.id}`)}>Open project</button>
               <button className="dk-btn ghost" onClick={() => navigate(`${p.id}/chat`)}>Chat</button>
+              <button className="dk-btn ghost" onClick={() => remove(p)} style={{ color: "var(--bad)", marginLeft: "auto" }}>Delete</button>
             </div>
           </div>
         ))}
