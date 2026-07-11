@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api/client.js";
+import { api, resolveMediaUrl } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { Avatar } from "../shared/ui.jsx";
 import { formatTime } from "../shared/format.js";
@@ -86,7 +86,7 @@ export default function Chat({ project }) {
                 {m.senderLabel && <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--brass)", marginBottom: 2 }}>{m.senderLabel}</div>}
                 {m.text && <div style={{ fontSize: 13, lineHeight: 1.45 }}>{m.text}</div>}
                 {m.attachmentPath && (
-                  <a href={m.attachmentPath} target="_blank" rel="noreferrer" style={{ color: "inherit", fontSize: 12, textDecoration: "underline", display: "block", marginTop: 4 }}>
+                  <a href={resolveMediaUrl(m.attachmentPath)} target="_blank" rel="noreferrer" style={{ color: "inherit", fontSize: 12, textDecoration: "underline", display: "block", marginTop: 4 }}>
                     📎 View attachment
                   </a>
                 )}

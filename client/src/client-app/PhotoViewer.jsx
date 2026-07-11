@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { resolveMediaUrl } from "../api/client.js";
 
 // Full-screen viewer for a daily update's photo/video gallery.
 export default function PhotoViewer({ media, index, onClose, onNav }) {
@@ -33,9 +34,9 @@ export default function PhotoViewer({ media, index, onClose, onNav }) {
             {m.caption}
           </div>
         ) : m.kind === "video" ? (
-          <video src={m.url} controls autoPlay style={{ maxWidth: "100%", maxHeight: "78vh", borderRadius: 12 }} />
+          <video src={resolveMediaUrl(m.url)} controls autoPlay style={{ maxWidth: "100%", maxHeight: "78vh", borderRadius: 12 }} />
         ) : (
-          <img src={m.url} alt="" style={{ maxWidth: "100%", maxHeight: "78vh", borderRadius: 12, objectFit: "contain" }} />
+          <img src={resolveMediaUrl(m.url)} alt="" style={{ maxWidth: "100%", maxHeight: "78vh", borderRadius: 12, objectFit: "contain" }} />
         )}
       </div>
 

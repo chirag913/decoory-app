@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../api/client.js";
+import { api, resolveMediaUrl } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { formatTime } from "../shared/format.js";
 import { Avatar, Spinner } from "../shared/ui.jsx";
@@ -65,7 +65,7 @@ export default function AdminChat() {
                   {!mine && <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--brass)", marginBottom: 2 }}>{project.client.name}</div>}
                   {m.text && <div style={{ fontSize: 13, lineHeight: 1.45 }}>{m.text}</div>}
                   {m.attachmentPath && (
-                    <a href={m.attachmentPath} target="_blank" rel="noreferrer" style={{ color: "inherit", fontSize: 12, textDecoration: "underline", display: "block", marginTop: 4 }}>📎 View attachment</a>
+                    <a href={resolveMediaUrl(m.attachmentPath)} target="_blank" rel="noreferrer" style={{ color: "inherit", fontSize: 12, textDecoration: "underline", display: "block", marginTop: 4 }}>📎 View attachment</a>
                   )}
                   <div style={{ fontSize: 9.5, opacity: 0.6, marginTop: 3, textAlign: "right" }}>{formatTime(m.createdAt)}</div>
                 </div>

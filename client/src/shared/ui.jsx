@@ -1,4 +1,5 @@
 import { initials } from "./format.js";
+import { resolveMediaUrl } from "../api/client.js";
 
 export const STATUS_STYLE = {
   paid: { bg: "#E4EFE8", fg: "#3E7A5B", label: "Paid ✓" },
@@ -68,11 +69,11 @@ export function Photo({ media, onClick, height = 84 }) {
   }
   if (media.kind === "video") {
     return (
-      <video src={media.url} controls style={{ height, borderRadius: 10, flex: 1, minWidth: 0, background: "#000" }} onClick={onClick} />
+      <video src={resolveMediaUrl(media.url)} controls style={{ height, borderRadius: 10, flex: 1, minWidth: 0, background: "#000" }} onClick={onClick} />
     );
   }
   return (
-    <img src={media.url} alt="" style={{ height, borderRadius: 10, flex: 1, minWidth: 0, objectFit: "cover", cursor: onClick ? "pointer" : "default" }} onClick={onClick} />
+    <img src={resolveMediaUrl(media.url)} alt="" style={{ height, borderRadius: 10, flex: 1, minWidth: 0, objectFit: "cover", cursor: onClick ? "pointer" : "default" }} onClick={onClick} />
   );
 }
 

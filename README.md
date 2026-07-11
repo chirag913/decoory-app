@@ -77,14 +77,20 @@ Either way:
 
 ### 3. Client — same server, or split
 
-`client/` is a static Vite build (`npm run build` → `client/dist/`) that talks to the API via same-origin `/api/*` and `/uploads/*` requests (see `client/vite.config.js`'s dev proxy — production needs the equivalent, either by serving `dist/` from the same Express server or configuring your static host / CDN to proxy `/api` and `/uploads` through to the backend URL). Simplest path: serve `client/dist/` as static files from the same Express app (`express.static`) so there's no CORS/proxy configuration to get right.
+`client/` is a static Vite build (`npm run build` → `client/dist/`) that talks to the API via same-origin `/api/*` and `/uploads/*` requests (see `client/vite.config.js`'s dev proxy). Two ways to make that resolve in production: serve `client/dist/` as static files from the same Express app (`express.static` — simplest, no CORS/proxy config needed) or, if hosting the web build separately, set `VITE_API_URL` (`client/.env.example`) to the deployed backend's absolute URL before running `npm run build`. **The Android app always needs `VITE_API_URL` set** regardless of how the web build is hosted — its WebView has no same-origin backend to fall back to (see "Handing the APK to clients" below).
 
 ### 4. Handing the APK to clients
 
 No Play Store listing needed for this use case — Decoory hands the APK directly:
 
 1. Build a **release** APK (not the debug one from local dev): in `client/android`, `./gradlew assembleRelease`, signed with a real keystore (`keytool -genkey -v -keystore decoory-release.keystore -alias decoory -keyalg RSA -keysize 2048 -validity 10000`, then configure `android/app/build.gradle`'s `signingConfigs` to use it — Capacitor's default project has a `release` build type ready for this).
-2. Before building, make sure `client/src/App.jsx`'s API base URL points at the deployed server (not `localhost`) — either hardcode the production URL for the mobile build or read it from a build-time env var, and rebuild (`npm run build && npx cap sync android`) before `assembleRelease`.
+2. **Before building, set `VITE_API_URL`** (`client/.env.example`) to a real, network-reachable server URL — a deployed backend, or your machine's LAN IP for local testing on a phone over the same WiFi (e.g. `http://192.168.1.5:4000`, found via `ipconfig`). This is required, not optional: the app's `/api/*` and `/uploads/*` calls are relative paths that only resolve inside a browser (Vite's dev proxy) or a same-origin production deploy — the Capacitor WebView has neither, so without this the installed app loads fine but every login/data fetch fails silently. Then rebuild before syncing:
+   ```bash
+   cd client
+   echo VITE_API_URL=http://192.168.1.5:4000 > .env.local   # your own IP/URL
+   npm run build && npx cap sync android
+   ```
+   Windows Firewall may prompt to allow inbound connections on your API port the first time a phone on the LAN reaches it — allow it, or the phone's requests will time out even though `curl` from the same machine works.
 3. Host the resulting `app-release.apk` somewhere clients can download it from a phone browser (a private link — Supabase Storage, a Drive link, an S3 bucket) and send that link. Android will prompt to allow installs from that source ("unknown sources") the first time — expected for a non-Play-Store APK.
 4. Each client logs in with the project-code + PIN issued at booking, or their email/phone + password — no separate account setup needed.
 

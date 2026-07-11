@@ -1,3 +1,10 @@
+// Relative "/api/..." only resolves in the browser (Vite's dev proxy, or a
+// production deploy that serves the built app from the same Express server
+// — see README "Deployment"). The Capacitor Android app's WebView has its
+// own internal origin with no such proxy, so a real absolute URL must be
+// baked in at build time via VITE_API_URL for that build to reach anything.
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 const TOKEN_KEY = "decoory_token";
 
 export function getToken() {
@@ -18,7 +25,7 @@ class ApiError extends Error {
 
 async function request(path, { method = "GET", body, headers, isForm } = {}) {
   const token = getToken();
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}/api${path}`, {
     method,
     headers: {
       ...(isForm ? {} : { "Content-Type": "application/json" }),
@@ -40,5 +47,14 @@ export const api = {
   patch: (path, body) => request(path, { method: "PATCH", body }),
   del: (path) => request(path, { method: "DELETE" }),
 };
+
+// Same problem as the /api/* calls above: server-returned media paths like
+// "/uploads/xyz.png" are relative, so they need the same absolute-base
+// treatment to resolve inside the Capacitor app. Supabase-hosted uploads
+// (production) already come back as absolute URLs and pass through untouched.
+export function resolveMediaUrl(url) {
+  if (!url || /^https?:\/\//.test(url)) return url;
+  return `${API_BASE}${url}`;
+}
 
 export { ApiError };
