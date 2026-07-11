@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client.js";
-import { useAuth } from "../auth/AuthContext.jsx";
 import { formatINR, formatDate } from "../shared/format.js";
 import { Chip, SectionTitle, Spinner } from "../shared/ui.jsx";
-import { openRazorpayCheckout } from "../shared/razorpay.js";
+import { whatsappPaymentLink } from "../shared/contact.js";
 
 // Maps our four-state payment status onto the prototype's simpler paid/due/scheduled chip.
 function chipStatus(status) {
@@ -13,38 +12,11 @@ function chipStatus(status) {
 }
 
 export default function Payments({ project }) {
-  const { user } = useAuth();
   const [payments, setPayments] = useState(null);
-  const [payingId, setPayingId] = useState(null);
-  const [justPaidId, setJustPaidId] = useState(null);
-  const [error, setError] = useState("");
 
-  const load = () => api.get(`/projects/${project.id}/payments`).then(({ payments }) => setPayments(payments));
-  useEffect(() => { load(); }, [project.id]);
-
-  const pay = async (payment) => {
-    setError("");
-    setPayingId(payment.id);
-    try {
-      const res = await api.post(`/payments/${payment.id}/checkout`, {});
-      if (!res?.razorpayOrder) {
-        setError("Online payment isn't set up yet — please contact your supervisor to arrange this payment.");
-        return;
-      }
-      const result = await openRazorpayCheckout({ order: res.razorpayOrder, keyId: res.keyId, payment, user });
-      await api.post(`/payments/${payment.id}/verify`, {
-        razorpayOrderId: result.razorpay_order_id,
-        razorpayPaymentId: result.razorpay_payment_id,
-        razorpaySignature: result.razorpay_signature,
-      });
-      setJustPaidId(payment.id);
-      load();
-    } catch (err) {
-      setError(err.message || "Payment could not be completed. Please try again or contact your supervisor.");
-    } finally {
-      setPayingId(null);
-    }
-  };
+  useEffect(() => {
+    api.get(`/projects/${project.id}/payments`).then(({ payments }) => setPayments(payments));
+  }, [project.id]);
 
   if (!payments) return <Spinner />;
 
@@ -58,8 +30,6 @@ export default function Payments({ project }) {
         <b>{formatINR(paidTotal)} of {formatINR(project.budgetPaise)}</b>
       </div>
 
-      {error && <div style={{ marginBottom: 12, fontSize: 12.5, color: "var(--bad)" }}>{error}</div>}
-
       {payments.map((p) => (
         <div key={p.id} className="ca-card" style={{ padding: 14, marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -72,16 +42,14 @@ export default function Payments({ project }) {
             <Chip status={chipStatus(p.status)} size="ca" />
           </div>
 
-          {p.status !== "paid" && p.status !== "scheduled" && justPaidId !== p.id && (
-            <button className="ca-btn" style={{ marginTop: 10 }} disabled={payingId === p.id} onClick={() => pay(p)}>
-              {payingId === p.id ? "Opening secure checkout…" : `Pay ${formatINR(p.amountPaise)} securely`}
-            </button>
-          )}
-          {justPaidId === p.id && (
-            <div style={{ marginTop: 10, background: "#E4EFE8", borderRadius: 10, padding: 12, fontSize: 12.5, color: "#2E5C45", lineHeight: 1.5 }}>
-              ✓ Payment received — receipt sent to your email.<br />
-              <b>Thank you for your valuable payment.</b> Decoory Interior's is committed to building the home of your dreams. 🏡
-            </div>
+          {p.status !== "paid" && p.status !== "scheduled" && (
+            <a
+              className="ca-btn" style={{ marginTop: 10, display: "block", textAlign: "center", textDecoration: "none", background: "#25D366" }}
+              href={whatsappPaymentLink({ projectName: project.name, projectCode: project.code, label: p.label, amountText: formatINR(p.amountPaise) })}
+              target="_blank" rel="noreferrer"
+            >
+              💬 Message us on WhatsApp for a payment link
+            </a>
           )}
         </div>
       ))}

@@ -35,7 +35,7 @@ All in `server/.env.example`. None are required for local dev — see the fallba
 | `SQLITE_PATH` | Local dev DB location | Defaults to `server/decoory.db` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Production Postgres + Storage | Local SQLite + local disk uploads |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | AI budget estimates + 10-day upsell suggestions | Rule-based rate-card estimator and rotating suggestion templates |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Online payment checkout | Client sees "contact your supervisor"; admin's "Mark as paid" always works |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Backend Razorpay endpoints (implemented, not currently called by the client UI — see "Payment collection" below) | No effect on the app today; admin's "Mark as paid" is the only payment-completion path in current use |
 | `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` | Push notifications | In-app notifications still work; push is just skipped |
 
 ## Testing
@@ -133,13 +133,19 @@ The cron schedule itself still fires on the real wall clock; these endpoints let
 
 `POST /api/estimate` is public (no auth) — it's the backend for the "Free budget estimate" screen at `/estimate`, reachable without logging in from the Login screen. It calls `services/anthropic.js`'s `estimateBudget()`, which uses Claude when `ANTHROPIC_API_KEY` is set, or falls back to a deterministic rate-card calculation (`config/rateCard.js`: ₹/sqft by room type × a city cost multiplier) when it's absent or the AI call/JSON-parse fails. Either path returns the same shape — an estimate range, 2-5 suggested brands (from the same six-brand catalog projects use, `config/brands.js`), and a timeline — and every submission is saved as a `leads` row (`source: 'self-estimation'`) with the full form as `search_data`, notifying all admins.
 
-## Razorpay (test mode)
+## Payment collection: WhatsApp link, not online checkout
+
+The client Payments screen's "Pay" action is a `wa.me` deep link (`client/src/shared/contact.js`) that opens a WhatsApp chat to Decoory's payment number with the project, milestone, and amount pre-filled — the client messages for a payment link and pays outside the app; admin then marks it paid manually (`POST /api/payments/:id/mark-paid`, already the Razorpay-absent fallback from day one) once received. This was a deliberate product change partway through the build, replacing the original in-app Razorpay checkout. It's a plain link (no API, no credentials, no automated messages) — not the "WhatsApp integration" the original spec excluded, which was about automated reminders.
+
+The backend Razorpay integration (`services/razorpay.js`, `routes/payments.js`'s `checkout`/`verify` endpoints, `routes/webhooks.js`) is still fully implemented, tested (`services/razorpay.test.js`), and documented below — it's just not called from the client UI anymore. Re-wiring it (or building an admin-side "send Razorpay link" flow instead of WhatsApp) is straightforward if that ever changes.
+
+### Razorpay (test mode) — implemented, currently unused by the client UI
 
 Three endpoints, all guarded by ownership checks (a client can only act on their own project's payments):
 
-- `POST /api/payments/:id/checkout` — creates a Razorpay order and returns it for Checkout.js to open. When `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are absent, returns `{ razorpayOrder: null }` instead of erroring, so the client shows "online payment isn't set up yet — contact your supervisor" rather than a dead Pay button. `client/src/shared/razorpay.js` lazy-loads `checkout.razorpay.com/v1/checkout.js` only when a payment is actually attempted.
-- `POST /api/payments/:id/verify` — Checkout.js's client-side success handler isn't proof of payment on its own, so this verifies the HMAC-SHA256 signature Razorpay returns (`services/razorpay.js`) before calling the same `markPaid()` the admin's manual fallback uses — same thank-you notification either way.
-- `POST /api/webhooks/razorpay` — the server-side `payment.captured` path, for redundancy beyond the client-side verify call. Needs raw request bytes for its own HMAC check, so it's mounted in `app.js` *before* the global `express.json()` parser, using `express.raw()` instead.
+- `POST /api/payments/:id/checkout` — creates a Razorpay order for Checkout.js to open. Returns `{ razorpayOrder: null }` when `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are absent rather than erroring.
+- `POST /api/payments/:id/verify` — verifies the HMAC-SHA256 signature Razorpay's Checkout.js success handler returns (`services/razorpay.js`) before calling the same `markPaid()` the admin's manual fallback uses.
+- `POST /api/webhooks/razorpay` — the server-side `payment.captured` path. Needs raw request bytes for its own HMAC check, so it's mounted in `app.js` *before* the global `express.json()` parser, using `express.raw()` instead.
 
 ## Firebase Cloud Messaging (push)
 
@@ -157,7 +163,7 @@ cd android
 ./gradlew assembleDebug    # Windows: gradlew.bat assembleDebug
 ```
 
-The debug APK lands at `client/android/app/build/outputs/apk/debug/app-debug.apk`. Needs [Android Studio](https://developer.android.com/studio) installed (bundles the JDK + Android SDK) — see "Handing the APK to clients" above for the release-build/signing steps. Push notifications on-device additionally need `google-services.json` from a real Firebase project, placed at `client/android/app/google-services.json` (gitignored).
+The debug APK normally lands at `client/android/app/build/outputs/apk/debug/app-debug.apk` — on at least one confirmed build it landed at `.../app/build/intermediates/apk/debug/app-debug.apk` instead (AGP version-dependent); if the first path is empty after a successful build, check the second. Needs [Android Studio](https://developer.android.com/studio) installed (bundles the JDK + Android SDK) — see "Handing the APK to clients" above for the release-build/signing steps, and **"Client — same server, or split" above for `VITE_API_URL`, required for the app to reach the API at all**. Push notifications on-device additionally need `google-services.json` from a real Firebase project, placed at `client/android/app/google-services.json` (gitignored).
 
 ## Project structure
 
@@ -171,6 +177,6 @@ client/           React + Vite app — single codebase, role-based routing
   src/admin/       Admin dashboard screens
   src/client-app/  Client mobile app screens
   src/public/      Public self-estimation screen (no login)
-  src/shared/      Design tokens, UI primitives, Razorpay/push helpers shared by both faces
+  src/shared/      Design tokens, UI primitives, WhatsApp/push helpers shared by both faces
   android/         Capacitor Android native project
 ```
