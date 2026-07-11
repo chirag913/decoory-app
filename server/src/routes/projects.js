@@ -1,4 +1,6 @@
 import { Router } from "express";
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import db from "../db/index.js";
 import { requireAuth, requireRole, loadOwnProject } from "../middleware/auth.js";
@@ -6,6 +8,17 @@ import { notify } from "../services/notify.js";
 import * as S from "../services/serialize.js";
 
 const router = Router();
+
+function nextProjectCode() {
+  const nums = db.prepare("SELECT code FROM projects WHERE code LIKE 'DCR-%'").all()
+    .map((r) => parseInt(r.code.replace("DCR-", ""), 10))
+    .filter((n) => !isNaN(n));
+  return `DCR-${(nums.length ? Math.max(...nums) : 100) + 1}`;
+}
+
+function randomPin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
 
 function getProjectOr404(req, res) {
   const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id);
@@ -26,6 +39,51 @@ router.get("/", requireAuth, (req, res) => {
     ? db.prepare("SELECT * FROM projects ORDER BY created_at DESC").all()
     : db.prepare("SELECT * FROM projects WHERE client_user_id = ?").all(req.user.id);
   res.json({ projects: rows.map(S.projectDetail) });
+});
+
+// POST /api/projects — onboards a new client: creates their login account
+// and their project together, since every project needs a client_user_id.
+// code/pin auto-generate if omitted (code: next DCR-1xx; pin: random 4
+// digits) — both can be overridden, e.g. to match a PIN already told to
+// the client at booking before this got entered into the system.
+router.post("/", requireAuth, requireRole("admin"), (req, res) => {
+  const { code, name, type, budgetPaise, startDate, handoverDate, pin, client } = req.body || {};
+  if (!name || !type || !budgetPaise || !client?.name) {
+    return res.status(400).json({ error: "name, type, budgetPaise, and client.name are required" });
+  }
+  if (!client.email && !client.phone) {
+    return res.status(400).json({ error: "client.email or client.phone is required" });
+  }
+
+  const finalCode = code?.trim().toUpperCase() || nextProjectCode();
+  if (db.prepare("SELECT id FROM projects WHERE code = ?").get(finalCode)) {
+    return res.status(409).json({ error: `Project code ${finalCode} is already in use` });
+  }
+  if (client.email || client.phone) {
+    const existing = db.prepare("SELECT id FROM users WHERE email = ? OR phone = ?").get(client.email || "", client.phone || "");
+    if (existing) return res.status(409).json({ error: "That email or phone is already registered to another user" });
+  }
+
+  const finalPin = pin?.trim() || randomPin();
+  const clientPassword = client.password?.trim() || crypto.randomBytes(6).toString("hex");
+  const clientUserId = uuid();
+  const projectId = uuid();
+
+  const create = db.transaction(() => {
+    db.prepare("INSERT INTO users (id, role, name, email, phone, password_hash) VALUES (?, 'client', ?, ?, ?, ?)")
+      .run(clientUserId, client.name, client.email || null, client.phone || null, bcrypt.hashSync(clientPassword, 10));
+    db.prepare(`
+      INSERT INTO projects (id, code, name, type, client_user_id, budget_paise, progress_pct, current_stage, start_date, handover_date, health, today_plan, today_team, pin)
+      VALUES (@id,@code,@name,@type,@clientUserId,@budgetPaise,0,'',@startDate,@handoverDate,'on-track','','',@pin)
+    `).run({
+      id: projectId, code: finalCode, name, type, clientUserId, budgetPaise,
+      startDate: startDate || null, handoverDate: handoverDate || null, pin: finalPin,
+    });
+  });
+  create();
+
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(projectId);
+  res.status(201).json({ project: S.projectDetail(project), clientPassword, pin: finalPin });
 });
 
 router.get("/me", requireAuth, requireRole("client"), loadOwnProject, (req, res) => {

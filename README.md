@@ -77,7 +77,9 @@ Either way:
 
 ### 3. Client — same server, or split
 
-`client/` is a static Vite build (`npm run build` → `client/dist/`) that talks to the API via same-origin `/api/*` and `/uploads/*` requests (see `client/vite.config.js`'s dev proxy). Two ways to make that resolve in production: serve `client/dist/` as static files from the same Express app (`express.static` — simplest, no CORS/proxy config needed) or, if hosting the web build separately, set `VITE_API_URL` (`client/.env.example`) to the deployed backend's absolute URL before running `npm run build`. **The Android app always needs `VITE_API_URL` set** regardless of how the web build is hosted — its WebView has no same-origin backend to fall back to (see "Handing the APK to clients" below).
+`client/` is a static Vite build (`npm run build` → `client/dist/`) that talks to the API via same-origin `/api/*` and `/uploads/*` requests (see `client/vite.config.js`'s dev proxy). Two ways to make that resolve in production: serve `client/dist/` as static files from the same Express app (`express.static` — simplest, no CORS/proxy config needed) or, if hosting the web build separately (e.g. Vercel), set `VITE_API_URL` (`client/.env.example`) to the deployed backend's absolute URL as an env var before the build runs. **The Android app always needs `VITE_API_URL` set** regardless of how the web build is hosted — its WebView has no same-origin backend to fall back to (see "Handing the APK to clients" below).
+
+**On Vercel specifically**, set Root Directory to `client` and add `VITE_API_URL` under Environment Variables before the first deploy. `client/vercel.json` adds the SPA fallback rewrite every client-side-routed React app needs there (`/(.*)→/index.html`) — without it, any URL besides the bare domain root 404s, since Vercel's static file server looks for a literal file at that path (there isn't one; React Router handles `/admin`, `/login`, etc. only after `index.html` loads).
 
 ### 4. Handing the APK to clients
 
@@ -165,9 +167,11 @@ cd android
 
 The debug APK normally lands at `client/android/app/build/outputs/apk/debug/app-debug.apk` — on at least one confirmed build it landed at `.../app/build/intermediates/apk/debug/app-debug.apk` instead (AGP version-dependent); if the first path is empty after a successful build, check the second. Needs [Android Studio](https://developer.android.com/studio) installed (bundles the JDK + Android SDK) — see "Handing the APK to clients" above for the release-build/signing steps, and **"Client — same server, or split" above for `VITE_API_URL`, required for the app to reach the API at all**. Push notifications on-device additionally need `google-services.json` from a real Firebase project, placed at `client/android/app/google-services.json` (gitignored).
 
-## Deleting records
+## Creating and deleting projects
 
-`DELETE /api/projects/:id`, `/api/leads/:id`, and `/api/team-members/:id` — reachable from the admin dashboard (Projects/Clients cards, a lead's detail drawer, a team member's card) behind a confirm dialog. Deleting a project cascades to everything scoped to it (updates, media, payments, team assignments, materials, suggestions, messages) in one transaction — SQLite enforces foreign keys here, so children have to go first — but **does not** delete the client's user account, so they keep their login even with no active project. There's currently no "create a new project" flow (projects only come from the seed script), so deleting one of the 3 seeded projects removes it permanently with no in-app way to add a replacement — ask if you want that built.
+`POST /api/projects` (Projects screen → **+ New project**) onboards a client and their project together in one form, since a project can't exist without a `client_user_id`. Project code (next `DCR-1xx`) and PIN (random 4 digits) auto-generate if left blank, both overridable — e.g. to match a PIN already told to the client at booking before this got entered into the system. Client password auto-generates too if not set, since PIN login is the primary flow; the success panel shows the code/PIN/password once so the admin can pass them on (not stored anywhere else in plaintext — same bcrypt hashing as every other user).
+
+`DELETE /api/projects/:id`, `/api/leads/:id`, and `/api/team-members/:id` — reachable from the admin dashboard (Projects/Clients cards, a lead's detail drawer, a team member's card) behind a confirm dialog. Deleting a project cascades to everything scoped to it (updates, media, payments, team assignments, materials, suggestions, messages) in one transaction — SQLite enforces foreign keys here, so children have to go first — but **does not** delete the client's user account, so they keep their login even with no active project.
 
 ## Project structure
 
