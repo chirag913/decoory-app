@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { notify } from "../services/notify.js";
 import * as S from "../services/serialize.js";
 import { normalizeParams } from "../utils/sql.js";
+import { isRazorpayConfigured, razorpayKeyId, createOrder, verifyPaymentSignature } from "../services/razorpay.js";
 
 const router = Router();
 
@@ -43,6 +44,48 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
       status = COALESCE(@status, status)
     WHERE id = @id
   `).run(normalizeParams({ label, amountPaise, dueAt, status, id: row.id }));
+  res.json({ payment: S.payment(db.prepare("SELECT * FROM payments WHERE id = ?").get(row.id)) });
+});
+
+function loadOwnedPayment(req, res) {
+  const row = db.prepare("SELECT * FROM payments WHERE id = ?").get(req.params.id);
+  if (!row) { res.status(404).json({ error: "Payment not found" }); return null; }
+  if (req.user.role === "client") {
+    const project = db.prepare("SELECT client_user_id FROM projects WHERE id = ?").get(row.project_id);
+    if (!project || project.client_user_id !== req.user.id) { res.status(403).json({ error: "Forbidden" }); return null; }
+  }
+  return row;
+}
+
+// Client taps "Pay now" — creates a Razorpay order to open Checkout.js with.
+// When Razorpay isn't configured, returns razorpayOrder: null so the client
+// can show "online payment isn't set up yet" instead of a dead button.
+router.post("/:id/checkout", requireAuth, async (req, res) => {
+  const row = loadOwnedPayment(req, res);
+  if (!row) return;
+  if (row.status === "paid") return res.status(400).json({ error: "This payment is already paid" });
+  if (!isRazorpayConfigured) return res.json({ razorpayOrder: null });
+
+  try {
+    const order = await createOrder({ amountPaise: row.amount_paise, receipt: row.id, notes: { paymentId: row.id, projectId: row.project_id } });
+    db.prepare("UPDATE payments SET razorpay_order_id = ? WHERE id = ?").run(order.id, row.id);
+    res.json({ razorpayOrder: order, keyId: razorpayKeyId });
+  } catch (e) {
+    res.status(502).json({ error: `Could not start checkout: ${e.message}` });
+  }
+});
+
+// Checkout.js's client-side success handler calls this with the signed
+// payment/order pair — verified here before marking paid, so a compromised
+// or spoofed client can't self-mark a payment as paid.
+router.post("/:id/verify", requireAuth, (req, res) => {
+  const row = loadOwnedPayment(req, res);
+  if (!row) return;
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body || {};
+  const valid = verifyPaymentSignature({ orderId: razorpayOrderId, paymentId: razorpayPaymentId, signature: razorpaySignature });
+  if (!valid) return res.status(400).json({ error: "Payment signature could not be verified" });
+
+  markPaid(row.id, { razorpayOrderId, razorpayPaymentId });
   res.json({ payment: S.payment(db.prepare("SELECT * FROM payments WHERE id = ?").get(row.id)) });
 });
 

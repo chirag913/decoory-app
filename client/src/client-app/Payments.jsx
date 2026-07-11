@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client.js";
+import { useAuth } from "../auth/AuthContext.jsx";
 import { formatINR, formatDate } from "../shared/format.js";
 import { Chip, SectionTitle, Spinner } from "../shared/ui.jsx";
+import { openRazorpayCheckout } from "../shared/razorpay.js";
 
 // Maps our four-state payment status onto the prototype's simpler paid/due/scheduled chip.
 function chipStatus(status) {
@@ -11,6 +13,7 @@ function chipStatus(status) {
 }
 
 export default function Payments({ project }) {
+  const { user } = useAuth();
   const [payments, setPayments] = useState(null);
   const [payingId, setPayingId] = useState(null);
   const [justPaidId, setJustPaidId] = useState(null);
@@ -23,16 +26,21 @@ export default function Payments({ project }) {
     setError("");
     setPayingId(payment.id);
     try {
-      // Razorpay checkout wires in here (see server/src/routes/payments.js
-      // and services/razorpay.js) — falls back to a friendly message when
-      // RAZORPAY_KEY_ID isn't configured yet.
       const res = await api.post(`/payments/${payment.id}/checkout`, {});
-      if (res?.razorpayOrder) {
-        // Real Razorpay Checkout.js flow — see PaymentCheckout helper.
-        await window.__decooryOpenRazorpay?.(res, payment, () => { setJustPaidId(payment.id); load(); });
+      if (!res?.razorpayOrder) {
+        setError("Online payment isn't set up yet — please contact your supervisor to arrange this payment.");
+        return;
       }
+      const result = await openRazorpayCheckout({ order: res.razorpayOrder, keyId: res.keyId, payment, user });
+      await api.post(`/payments/${payment.id}/verify`, {
+        razorpayOrderId: result.razorpay_order_id,
+        razorpayPaymentId: result.razorpay_payment_id,
+        razorpaySignature: result.razorpay_signature,
+      });
+      setJustPaidId(payment.id);
+      load();
     } catch (err) {
-      setError(err.message || "Payment could not be started. Please try again or contact your supervisor.");
+      setError(err.message || "Payment could not be completed. Please try again or contact your supervisor.");
     } finally {
       setPayingId(null);
     }

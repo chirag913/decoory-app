@@ -13,12 +13,19 @@ import suggestionsRoutes from "./routes/suggestions.js";
 import reportsRoutes from "./routes/reports.js";
 import uploadsRoutes from "./routes/uploads.js";
 import estimateRoutes from "./routes/estimate.js";
+import webhooksRoutes from "./routes/webhooks.js";
 import devRoutes from "./routes/dev.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(cors());
+
+// Mounted before express.json() — Razorpay's webhook signature is computed
+// over the raw request bytes, so this route parses its own body (see
+// routes/webhooks.js) instead of the pre-parsed JSON every other route gets.
+app.use("/api/webhooks", webhooksRoutes);
+
 app.use(express.json({ limit: "10mb" }));
 
 // Local-disk fallback for uploads (see services/storage.js) — a no-op once

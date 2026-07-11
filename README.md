@@ -2,7 +2,7 @@
 
 Admin dashboard + client mobile app for Decoory Interior's, an Indian interior design company.
 
-**Status:** Phases 1-6 complete (backend API, client app, admin dashboard, file uploads, scheduler, AI estimation). Razorpay, push, and the Android build come in subsequent phases (see project task list).
+**Status:** Phases 1-7 complete (backend API, client app, admin dashboard, file uploads, scheduler, AI estimation, Razorpay). Push notifications and the Android build come in subsequent phases (see project task list).
 
 ## Backend quick start
 
@@ -60,6 +60,16 @@ The cron schedule itself still fires on the real wall clock; these endpoints let
 ## AI budget estimation
 
 `POST /api/estimate` is public (no auth) — it's the backend for the "Free budget estimate" screen at `/estimate`, reachable without logging in from the Login screen. It calls `services/anthropic.js`'s `estimateBudget()`, which uses Claude when `ANTHROPIC_API_KEY` is set, or falls back to a deterministic rate-card calculation (`config/rateCard.js`: ₹/sqft by room type × a city cost multiplier) when it's absent or the AI call/JSON-parse fails. Either path returns the same shape — an estimate range, 2-5 suggested brands (from the same six-brand catalog projects use, `config/brands.js`), and a timeline — and every submission is saved as a `leads` row (`source: 'self-estimation'`) with the full form as `search_data`, notifying all admins.
+
+## Razorpay (test mode)
+
+Three endpoints, all guarded by ownership checks (a client can only act on their own project's payments):
+
+- `POST /api/payments/:id/checkout` — creates a Razorpay order and returns it for Checkout.js to open. When `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` are absent, returns `{ razorpayOrder: null }` instead of erroring, so the client shows "online payment isn't set up yet — contact your supervisor" rather than a dead Pay button. `client/src/shared/razorpay.js` lazy-loads `checkout.razorpay.com/v1/checkout.js` only when a payment is actually attempted.
+- `POST /api/payments/:id/verify` — Checkout.js's client-side success handler isn't proof of payment on its own, so this verifies the HMAC-SHA256 signature Razorpay returns (`services/razorpay.js`) before calling the same `markPaid()` the admin's manual fallback uses — same thank-you notification either way.
+- `POST /api/webhooks/razorpay` — the server-side `payment.captured` path, for redundancy beyond the client-side verify call. Needs raw request bytes for its own HMAC check, so it's mounted in `app.js` *before* the global `express.json()` parser, using `express.raw()` instead.
+
+Since this environment has no real Razorpay test keys, the "absent" fallback path (and the admin's always-available "Mark as paid" manual action) is what's actually exercised end-to-end here; the checkout/verify/webhook code is written to Razorpay's documented signature scheme and covered by unit tests in `services/razorpay.test.js` (valid signature, tampered signature, replay with a different payment id, missing fields) — set real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`/`RAZORPAY_WEBHOOK_SECRET` to exercise the live checkout flow.
 
 ## Project structure
 
