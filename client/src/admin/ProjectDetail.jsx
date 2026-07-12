@@ -6,7 +6,9 @@ import { Bar, Chip, Spinner } from "../shared/ui.jsx";
 import UpdatesTab from "./project-tabs/UpdatesTab.jsx";
 import PaymentsTab from "./project-tabs/PaymentsTab.jsx";
 import TeamTab from "./project-tabs/TeamTab.jsx";
+import MilestonesTab from "./project-tabs/MilestonesTab.jsx";
 import TodayPlanCard from "./project-tabs/TodayPlanCard.jsx";
+import ProjectDetailsCard from "./project-tabs/ProjectDetailsCard.jsx";
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -34,17 +36,21 @@ export default function ProjectDetail() {
         </div>
       </div>
       <div style={{ margin: "16px 0 4px", maxWidth: 520 }}><Bar v={project.progressPct} /></div>
-      <div style={{ fontSize: 12.5, color: "var(--mut)", marginBottom: 14 }}>{project.progressPct}% complete — {project.currentStage}</div>
+      <div style={{ fontSize: 12.5, color: "var(--mut)", marginBottom: 14, display: "flex", alignItems: "flex-start", flexWrap: "wrap" }}>
+        <span style={{ marginTop: 2 }}>{project.progressPct}% complete — {project.currentStage}</span>
+        <ProjectDetailsCard project={project} onSaved={reload} />
+      </div>
 
       <TodayPlanCard project={project} onSaved={reload} />
 
       <div style={{ borderBottom: "1px solid var(--line)", margin: "18px 0" }}>
-        {[["updates", "Daily updates"], ["payments", "Payments"], ["team", "My Project Team"]].map(([k, l]) => (
+        {[["updates", "Daily updates"], ["milestones", "Milestones"], ["payments", "Payments"], ["team", "My Project Team"]].map(([k, l]) => (
           <button key={k} className={`dk-tab ${tab === k ? "on" : ""}`} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
 
       {tab === "updates" && <UpdatesTab project={project} />}
+      {tab === "milestones" && <MilestonesTab project={project} onChange={reload} />}
       {tab === "payments" && <PaymentsTab project={project} onChange={reload} />}
       {tab === "team" && <TeamTab project={project} onChange={reload} />}
     </div>

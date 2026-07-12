@@ -5,12 +5,13 @@ import { v4 as uuid } from "uuid";
 import db from "./index.js";
 import { rupeesToPaise } from "../utils/money.js";
 import { BRAND_INFO } from "../config/brands.js";
+import { recomputeProgress } from "../services/progress.js";
 
 const DEV_PASSWORD = "decoory123";
 
 const TABLES_IN_DELETE_ORDER = [
   "notifications", "messages", "suggestions",
-  "update_media", "daily_updates", "payments", "materials",
+  "update_media", "daily_updates", "milestones", "payments", "materials",
   "project_team", "team_members", "leads", "documents",
   "projects", "users",
 ];
@@ -99,6 +100,37 @@ function run() {
   ];
   for (const p of PROJECTS) insertProject.run(p);
   const pid = Object.fromEntries(PROJECTS.map((p) => [p.code, p.id]));
+
+  // ── Milestones — the checklist that drives progress_pct (see services/progress.js) ──
+  const insertMilestone = db.prepare(`INSERT INTO milestones (id, project_id, title, done, sort_order, completed_at) VALUES (?,?,?,?,?,?)`);
+  function seedMilestones(code, titles) {
+    titles.forEach(([title, done], i) => {
+      insertMilestone.run(uuid(), pid[code], title, done ? 1 : 0, i, done ? ist("2026-07-05") : null);
+    });
+    recomputeProgress(pid[code]);
+  }
+
+  seedMilestones("DCR-101", [
+    ["Design finalized", true],
+    ["Material procurement", true],
+    ["Electrical & plumbing rough-in", true],
+    ["Modular kitchen & wardrobe install", false],
+    ["Painting & finishing", false],
+  ]);
+  seedMilestones("DCR-102", [
+    ["Design finalized", true],
+    ["Material procurement", true],
+    ["Civil & electrical work", false],
+    ["False ceiling & painting", false],
+    ["Modular install & handover", false],
+  ]);
+  seedMilestones("DCR-103", [
+    ["Design finalized", true],
+    ["Material procurement", true],
+    ["Modular kitchen & wardrobe install", true],
+    ["Electrical & civil work", true],
+    ["Painting & finishing", false],
+  ]);
 
   // ── Daily updates + media ──
   const insertUpdate = db.prepare(`INSERT INTO daily_updates (id, project_id, update_date, items) VALUES (?,?,?,?)`);

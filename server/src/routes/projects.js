@@ -5,6 +5,7 @@ import { v4 as uuid } from "uuid";
 import db from "../db/index.js";
 import { requireAuth, requireRole, loadOwnProject } from "../middleware/auth.js";
 import { notify } from "../services/notify.js";
+import { recomputeProgress } from "../services/progress.js";
 import * as S from "../services/serialize.js";
 
 const router = Router();
@@ -115,6 +116,26 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   values.id = project.id;
   db.prepare(`UPDATE projects SET ${sets.join(", ")} WHERE id = @id`).run(values);
   res.json({ project: S.projectDetail(db.prepare("SELECT * FROM projects WHERE id = ?").get(project.id)) });
+});
+
+// ── Milestones (drive progress_pct — see services/progress.js) ──
+router.get("/:id/milestones", requireAuth, (req, res) => {
+  const project = getProjectOr404(req, res);
+  if (!project) return;
+  const rows = db.prepare("SELECT * FROM milestones WHERE project_id = ? ORDER BY sort_order ASC, created_at ASC").all(project.id);
+  res.json({ milestones: rows.map(S.milestone) });
+});
+
+router.post("/:id/milestones", requireAuth, requireRole("admin"), (req, res) => {
+  const project = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id);
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  const title = (req.body.title || "").trim();
+  if (!title) return res.status(400).json({ error: "title is required" });
+  const nextOrder = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 as n FROM milestones WHERE project_id = ?").get(project.id).n;
+  const id = uuid();
+  db.prepare("INSERT INTO milestones (id, project_id, title, sort_order) VALUES (?,?,?,?)").run(id, project.id, title, nextOrder);
+  recomputeProgress(project.id);
+  res.status(201).json({ milestone: S.milestone(db.prepare("SELECT * FROM milestones WHERE id = ?").get(id)) });
 });
 
 // ── Daily updates ──
@@ -246,6 +267,7 @@ router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {
     for (const uid of updateIds) delMedia.run(uid);
 
     db.prepare("DELETE FROM daily_updates WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM milestones WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM payments WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM project_team WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM materials WHERE project_id = ?").run(projectId);

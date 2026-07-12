@@ -29,6 +29,18 @@ export function projectDetail(p) {
   return { ...projectSummary(p), client };
 }
 
+export function milestone(row) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    title: row.title,
+    done: !!row.done,
+    sortOrder: row.sort_order,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+  };
+}
+
 export function dailyUpdate(u) {
   const media = db.prepare("SELECT id, file_path, kind FROM update_media WHERE update_id = ?").all(u.id);
   return {

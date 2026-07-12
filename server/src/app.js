@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.js";
 import projectsRoutes from "./routes/projects.js";
+import milestonesRoutes from "./routes/milestones.js";
 import paymentsRoutes from "./routes/payments.js";
 import leadsRoutes from "./routes/leads.js";
 import teamRoutes from "./routes/team.js";
@@ -37,6 +38,7 @@ app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISO
 
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectsRoutes);
+app.use("/api/milestones", milestonesRoutes);
 app.use("/api/payments", paymentsRoutes);
 app.use("/api/leads", leadsRoutes);
 app.use("/api/team-members", teamRoutes);
