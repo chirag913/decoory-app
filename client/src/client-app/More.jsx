@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
+import { useAuth } from "../auth/AuthContext.jsx";
 import { SectionTitle, Spinner } from "../shared/ui.jsx";
 import { MATERIAL_COLORS } from "../shared/ui.jsx";
 
 export default function More({ project }) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [materials, setMaterials] = useState(null);
   const [documents, setDocuments] = useState(null);
   const [open, setOpen] = useState(null);
@@ -60,6 +62,13 @@ export default function More({ project }) {
         <div style={{ fontSize: 13.5, fontWeight: 700 }}>Need something? Talk to us 💬</div>
         <div style={{ fontSize: 12, color: "#9A968A", marginTop: 3 }}>Chat with your supervisor · share reference designs · raise a change request</div>
       </div>
+
+      <button
+        className="ca-btn ghost" style={{ width: "100%", marginBottom: 24 }}
+        onClick={() => { logout(); navigate("/login"); }}
+      >
+        Sign out
+      </button>
     </div>
   );
 }
