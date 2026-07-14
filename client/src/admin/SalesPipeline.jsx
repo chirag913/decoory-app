@@ -5,8 +5,11 @@ import { Chip, Spinner } from "../shared/ui.jsx";
 import { LEAD_STAGES } from "../shared/leadStages.js";
 import LeadDrawer from "./LeadDrawer.jsx";
 
+const SOURCES = ["manual", "facebook", "google", "referral", "website"];
+const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website" };
+
 function AddLeadForm({ onAdded, onClose }) {
-  const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "" });
+  const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "", source: "manual" });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -15,7 +18,7 @@ function AddLeadForm({ onAdded, onClose }) {
     try {
       await api.post("/leads", {
         name: form.name, city: form.city || null, phone: form.phone || null, scope: form.scope || null,
-        statedBudgetPaise: form.budget ? Math.round(Number(form.budget) * 100) : null, source: "manual",
+        statedBudgetPaise: form.budget ? Math.round(Number(form.budget) * 100) : null, source: form.source,
       });
       onAdded();
       onClose();
@@ -33,6 +36,9 @@ function AddLeadForm({ onAdded, onClose }) {
         <input className="dk-input" style={{ width: 160 }} placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         <input className="dk-input" style={{ width: 180 }} placeholder="Property type, e.g. 3BHK" value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} />
         <input className="dk-input" style={{ width: 140 }} type="number" placeholder="Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+        <select className="dk-select" style={{ width: 140 }} value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
+          {SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
+        </select>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button className="dk-btn" disabled={saving || !form.name} onClick={save}>{saving ? "Saving…" : "Add lead"}</button>
@@ -51,7 +57,10 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onClick }) {
       style={{ padding: 12, marginBottom: 10, cursor: "grab", opacity: dragging ? 0.4 : 1, userSelect: "none" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 6 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700 }}>{lead.name}</div>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--mut)", fontWeight: 700 }}>{lead.leadCode}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700 }}>{lead.name}</div>
+        </div>
         <Chip status={lead.priority} />
       </div>
       <div style={{ fontSize: 12, color: "var(--mut)", marginTop: 4 }}>{lead.phone || "No phone"}</div>
@@ -65,8 +74,8 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onClick }) {
       </div>
 
       <div style={{ borderTop: "1px solid var(--line)", marginTop: 8, paddingTop: 8, fontSize: 11.5, color: "var(--mut)" }}>
-        <div>👤 {lead.assignedSalesperson || "Unassigned"}</div>
-        <div style={{ marginTop: 2 }}>🕒 {timeAgo(lead.lastActivityAt)}</div>
+        <div>👤 {lead.leadOwner || "Unassigned"} · <Chip status={lead.interestLevel} /></div>
+        <div style={{ marginTop: 2 }}>🕒 {lead.lastContactDate ? timeAgo(lead.lastContactDate) : "No contact yet"}</div>
         <div style={{ marginTop: 2 }}>📞 Next follow-up: {lead.followUpAt ? formatDate(lead.followUpAt) : "Not set"}</div>
       </div>
     </div>

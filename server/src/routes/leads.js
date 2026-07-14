@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { v4 as uuid } from "uuid";
 import db from "../db/index.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import * as S from "../services/serialize.js";
 import { normalizeParams } from "../utils/sql.js";
 import { createProjectForClient, ApiError } from "../services/projects.js";
+import { createLead, logActivity, STAGE_LABEL } from "../services/leads.js";
 import { now } from "../utils/clock.js";
 
 const router = Router();
@@ -15,19 +15,34 @@ router.get("/", requireAuth, requireRole("admin"), (req, res) => {
 });
 
 router.post("/", requireAuth, requireRole("admin"), (req, res) => {
-  const { name, city, phone, scope, statedBudgetPaise, aiEstimateLowPaise, aiEstimateHighPaise, source, searchData, priority, assignedSalesperson } = req.body;
+  const { name } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
-  const id = uuid();
-  db.prepare(`
-    INSERT INTO leads (id, name, city, phone, scope, stated_budget_paise, ai_estimate_low_paise, ai_estimate_high_paise, source, status, priority, assigned_salesperson, search_data)
-    VALUES (@id,@name,@city,@phone,@scope,@statedBudgetPaise,@aiEstimateLowPaise,@aiEstimateHighPaise,@source,'new-lead',@priority,@assignedSalesperson,@searchData)
-  `).run(normalizeParams({
-    id, name, city, phone, scope,
-    statedBudgetPaise, aiEstimateLowPaise, aiEstimateHighPaise,
-    source: source || "manual", priority: priority || "medium", assignedSalesperson,
-    searchData: searchData ? JSON.stringify(searchData) : null,
-  }));
-  res.status(201).json({ lead: S.lead(db.prepare("SELECT * FROM leads WHERE id = ?").get(id)) });
+  const lead = createLead(req.body, req.user.name);
+  res.status(201).json({ lead: S.lead(lead) });
+});
+
+// ── Activity timeline (append-only — see services/leads.js) ──
+function getLeadOr404(req, res) {
+  const lead = db.prepare("SELECT * FROM leads WHERE id = ?").get(req.params.id);
+  if (!lead) { res.status(404).json({ error: "Lead not found" }); return null; }
+  return lead;
+}
+
+router.get("/:id/activities", requireAuth, requireRole("admin"), (req, res) => {
+  const lead = getLeadOr404(req, res);
+  if (!lead) return;
+  const rows = db.prepare("SELECT * FROM lead_activities WHERE lead_id = ? ORDER BY created_at DESC").all(lead.id);
+  res.json({ activities: rows.map(S.leadActivity) });
+});
+
+router.post("/:id/activities", requireAuth, requireRole("admin"), (req, res) => {
+  const lead = getLeadOr404(req, res);
+  if (!lead) return;
+  const { type, note } = req.body;
+  const VALID_TYPES = ["lead_created", "whatsapp_sent", "called", "emailed", "follow_up", "visit_scheduled", "visit_completed", "quotation_sent", "status_changed", "note", "advance_received", "other"];
+  if (!VALID_TYPES.includes(type)) return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(", ")}` });
+  const activity = logActivity(lead.id, type, note, req.user.name);
+  res.status(201).json({ activity: S.leadActivity(activity), lead: S.lead(db.prepare("SELECT * FROM leads WHERE id = ?").get(lead.id)) });
 });
 
 // A full name's last word, for the auto-generated project name convention
@@ -55,8 +70,8 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   const row = db.prepare("SELECT * FROM leads WHERE id = ?").get(req.params.id);
   if (!row) return res.status(404).json({ error: "Lead not found" });
   const {
-    status, name, city, phone, scope, statedBudgetPaise, priority, assignedSalesperson,
-    expectedRevenuePaise, followUpAt, siteVisitAt,
+    status, name, phone, whatsapp, email, address, city, scope, statedBudgetPaise,
+    priority, interestLevel, leadOwner, notes, tags, expectedRevenuePaise, followUpAt, siteVisitAt,
   } = req.body;
 
   // Validate + create the project BEFORE touching the lead row, so a failed
@@ -90,19 +105,34 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
     UPDATE leads SET
       status = COALESCE(@status, status), name = COALESCE(@name, name),
       city = COALESCE(@city, city), phone = COALESCE(@phone, phone), scope = COALESCE(@scope, scope),
+      whatsapp = CASE WHEN @whatsapp IS NULL THEN whatsapp ELSE NULLIF(@whatsapp, '') END,
+      email = CASE WHEN @email IS NULL THEN email ELSE NULLIF(@email, '') END,
+      address = CASE WHEN @address IS NULL THEN address ELSE NULLIF(@address, '') END,
       stated_budget_paise = COALESCE(@statedBudgetPaise, stated_budget_paise),
       priority = COALESCE(@priority, priority),
-      assigned_salesperson = CASE WHEN @assignedSalesperson IS NULL THEN assigned_salesperson ELSE NULLIF(@assignedSalesperson, '') END,
+      interest_level = COALESCE(@interestLevel, interest_level),
+      lead_owner = CASE WHEN @leadOwner IS NULL THEN lead_owner ELSE NULLIF(@leadOwner, '') END,
+      notes = CASE WHEN @notes IS NULL THEN notes ELSE NULLIF(@notes, '') END,
+      tags = COALESCE(@tags, tags),
       expected_revenue_paise = COALESCE(@expectedRevenuePaise, expected_revenue_paise),
       follow_up_at = CASE WHEN @followUpAt IS NULL THEN follow_up_at ELSE NULLIF(@followUpAt, '') END,
       site_visit_at = CASE WHEN @siteVisitAt IS NULL THEN site_visit_at ELSE NULLIF(@siteVisitAt, '') END,
-      converted_project_id = COALESCE(@convertedProjectId, converted_project_id),
-      last_activity_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      converted_project_id = COALESCE(@convertedProjectId, converted_project_id)
     WHERE id = @id
   `).run(normalizeParams({
-    id: row.id, status, name, city, phone, scope, statedBudgetPaise, priority, assignedSalesperson, expectedRevenuePaise, followUpAt, siteVisitAt,
+    id: row.id, status, name, city, phone, whatsapp, email, address, scope, statedBudgetPaise,
+    priority, interestLevel, leadOwner, notes,
+    tags: tags !== undefined ? JSON.stringify(tags) : null,
+    expectedRevenuePaise, followUpAt, siteVisitAt,
     convertedProjectId: createdProject?.project.id,
   }));
+
+  if (status && status !== row.status) {
+    logActivity(row.id, "status_changed", `${STAGE_LABEL[row.status] || row.status} → ${STAGE_LABEL[status] || status}`, req.user.name);
+  }
+  if (createdProject) {
+    logActivity(row.id, "advance_received", `Project ${createdProject.project.code} created`, req.user.name);
+  }
 
   const updated = db.prepare("SELECT * FROM leads WHERE id = ?").get(row.id);
   res.json({
@@ -113,6 +143,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
 
 router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {
   db.prepare("UPDATE projects SET source_lead_id = NULL WHERE source_lead_id = ?").run(req.params.id);
+  db.prepare("DELETE FROM lead_activities WHERE lead_id = ?").run(req.params.id);
   const result = db.prepare("DELETE FROM leads WHERE id = ?").run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: "Lead not found" });
   res.status(204).end();

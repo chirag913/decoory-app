@@ -6,13 +6,14 @@ import db from "./index.js";
 import { rupeesToPaise } from "../utils/money.js";
 import { BRAND_INFO } from "../config/brands.js";
 import { recomputeProgress } from "../services/progress.js";
+import { createLead, logActivity } from "../services/leads.js";
 
 const DEV_PASSWORD = "decoory123";
 
 const TABLES_IN_DELETE_ORDER = [
   "notifications", "messages", "suggestions",
   "update_media", "daily_updates", "milestones", "payments", "materials",
-  "project_team", "team_members", "leads", "documents",
+  "project_team", "team_members", "lead_activities", "leads", "documents",
   "projects", "users",
 ];
 
@@ -83,39 +84,50 @@ function run() {
   // that became each demo project, linked both ways (projects.source_lead_id
   // set at insert; leads.converted_project_id backfilled once the project
   // exists — see admin/SalesPipeline.jsx for the live auto-conversion flow
-  // this mirrors).
-  const insertLead = db.prepare(`
-    INSERT INTO leads (
-      id, name, city, phone, scope, stated_budget_paise, ai_estimate_low_paise, ai_estimate_high_paise,
-      expected_revenue_paise, source, status, priority, assigned_salesperson, search_data,
-      follow_up_at, site_visit_at, last_activity_at, converted_project_id, created_at
-    ) VALUES (
-      @id,@name,@city,@phone,@scope,@stated_budget_paise,@ai_estimate_low_paise,@ai_estimate_high_paise,
-      @expected_revenue_paise,@source,@status,@priority,@assigned_salesperson,@search_data,
-      @follow_up_at,@site_visit_at,@last_activity_at,@converted_project_id,@created_at
-    )
-  `);
-  function insertLeadRow(l) {
-    insertLead.run({
-      id: l.id, name: l.name, city: l.city || null, phone: l.phone || null, scope: l.scope || null,
-      stated_budget_paise: l.budget ? rupeesToPaise(l.budget) : null,
-      ai_estimate_low_paise: l.lo ? rupeesToPaise(l.lo) : null, ai_estimate_high_paise: l.hi ? rupeesToPaise(l.hi) : null,
-      expected_revenue_paise: l.expectedRevenue ? rupeesToPaise(l.expectedRevenue) : null,
-      source: l.source, status: l.status, priority: l.priority || "medium",
-      assigned_salesperson: l.assignedSalesperson || null,
-      search_data: l.city || l.scope ? JSON.stringify({ city: l.city, scope: l.scope, statedBudgetPaise: l.budget ? rupeesToPaise(l.budget) : null, source: l.source }) : null,
-      follow_up_at: l.followUpAt || null, site_visit_at: l.siteVisitAt || null,
-      last_activity_at: l.lastActivityAt || l.created_at, converted_project_id: null,
-      created_at: l.created_at,
-    });
+  // this mirrors). Each also gets a realistic activity history, since every
+  // lead should show a real timeline, not just a bare "Lead Created" entry.
+  function seedLeadWithHistory(fields, history, finalStatus) {
+    const lead = createLead(fields, admin.name);
+    for (const h of history) logActivity(lead.id, h.type, h.note, admin.name, h.at);
+    if (finalStatus && finalStatus !== lead.status) {
+      db.prepare("UPDATE leads SET status = ? WHERE id = ?").run(finalStatus, lead.id);
+    }
+    return db.prepare("SELECT * FROM leads WHERE id = ?").get(lead.id);
   }
 
   const CONVERTED_LEADS = {
-    "DCR-101": { id: uuid(), name: "Rakesh Sharma", city: "Noida", phone: "+919876500011", scope: "3BHK · Sector 62, Noida", budget: 1850000, expectedRevenue: 1850000, source: "self-estimation", status: "won", priority: "medium", assignedSalesperson: "Priya", created_at: ist("2026-04-20", "11:00:00"), lastActivityAt: ist("2026-05-02", "18:00:00") },
-    "DCR-102": { id: uuid(), name: "Anita Verma", city: "Greater Noida West", phone: "+919876500012", scope: "Duplex · Greater Noida West", budget: 3200000, expectedRevenue: 3200000, source: "design-upload", status: "won", priority: "high", assignedSalesperson: "Rahul", created_at: ist("2026-05-22", "11:00:00"), lastActivityAt: ist("2026-06-05", "18:00:00") },
-    "DCR-103": { id: uuid(), name: "Neha Kapoor", city: "Ghaziabad", phone: "+919876500013", scope: "2BHK · Indirapuram, Ghaziabad", budget: 980000, expectedRevenue: 980000, source: "self-estimation", status: "won", priority: "medium", assignedSalesperson: "Priya", created_at: ist("2026-02-25", "11:00:00"), lastActivityAt: ist("2026-03-10", "18:00:00") },
+    "DCR-101": seedLeadWithHistory(
+      { name: "Rakesh Sharma", city: "Noida", phone: "+919876500011", scope: "3BHK · Sector 62, Noida", statedBudgetPaise: rupeesToPaise(1850000), expectedRevenuePaise: rupeesToPaise(1850000), source: "self-estimation", priority: "medium", leadOwner: "Priya", createdAt: ist("2026-04-20", "11:00:00") },
+      [
+        { type: "called", note: "Discussed 3BHK modular kitchen + wardrobe scope", at: ist("2026-04-21", "10:30:00") },
+        { type: "visit_completed", note: "Site visit done, measurements taken", at: ist("2026-04-24", "12:00:00") },
+        { type: "quotation_sent", note: "Sent quotation — ₹18.5L", at: ist("2026-04-27", "15:00:00") },
+        { type: "status_changed", note: "Quotation Sent → Negotiation", at: ist("2026-04-29", "11:00:00") },
+        { type: "advance_received", note: "Booking advance received — Project DCR-101 created", at: ist("2026-05-02", "18:00:00") },
+      ],
+      "won",
+    ),
+    "DCR-102": seedLeadWithHistory(
+      { name: "Anita Verma", city: "Greater Noida West", phone: "+919876500012", scope: "Duplex · Greater Noida West", statedBudgetPaise: rupeesToPaise(3200000), expectedRevenuePaise: rupeesToPaise(3200000), source: "design-upload", priority: "high", leadOwner: "Rahul", createdAt: ist("2026-05-22", "11:00:00") },
+      [
+        { type: "called", note: "Discussed duplex full-home scope", at: ist("2026-05-23", "10:30:00") },
+        { type: "visit_completed", note: "Site visit done", at: ist("2026-05-27", "12:00:00") },
+        { type: "quotation_sent", note: "Sent quotation — ₹32.0L", at: ist("2026-05-30", "15:00:00") },
+        { type: "advance_received", note: "Booking advance received — Project DCR-102 created", at: ist("2026-06-05", "18:00:00") },
+      ],
+      "won",
+    ),
+    "DCR-103": seedLeadWithHistory(
+      { name: "Neha Kapoor", city: "Ghaziabad", phone: "+919876500013", scope: "2BHK · Indirapuram, Ghaziabad", statedBudgetPaise: rupeesToPaise(980000), expectedRevenuePaise: rupeesToPaise(980000), source: "self-estimation", priority: "medium", leadOwner: "Priya", createdAt: ist("2026-02-25", "11:00:00") },
+      [
+        { type: "called", note: "Discussed 2BHK full-home scope", at: ist("2026-02-26", "10:30:00") },
+        { type: "visit_completed", note: "Site visit done", at: ist("2026-03-02", "12:00:00") },
+        { type: "quotation_sent", note: "Sent quotation — ₹9.8L", at: ist("2026-03-06", "15:00:00") },
+        { type: "advance_received", note: "Booking advance received — Project DCR-103 created", at: ist("2026-03-10", "18:00:00") },
+      ],
+      "won",
+    ),
   };
-  for (const l of Object.values(CONVERTED_LEADS)) insertLeadRow(l);
 
   const insertProject = db.prepare(`
     INSERT INTO projects (id, code, name, type, client_user_id, budget_paise, progress_pct, current_stage, start_date, handover_date, health, today_plan, today_team, pin, source_lead_id)
@@ -307,20 +319,62 @@ function run() {
   // ── Sales Pipeline leads still in progress (not yet converted) ──
   // Spread across nearly every stage so the Kanban board demos fully —
   // see admin/SalesPipeline.jsx. followUpAt/siteVisitAt feed the Overview
-  // dashboard's "Today's Actions" panel too.
-  const PIPELINE_LEADS = [
-    { name: "Vivek Malhotra", city: "Noida", scope: "Living room", budget: 800000, lo: 740000, hi: 860000, source: "self-estimation", status: "new-lead", priority: "medium", created_at: ist(istToday(), "09:42:00") },
-    { name: "Priya Nair", city: "Gurugram", scope: "Full 3BHK", budget: 2200000, lo: 1900000, hi: 2400000, source: "self-estimation", status: "new-lead", priority: "high", created_at: ist(istToday(), "08:10:00") },
-    { name: "Rekha Iyer", city: "Faridabad", scope: "2BHK", budget: 600000, source: "manual", status: "attempting-contact", priority: "medium", assignedSalesperson: "Priya", followUpAt: ist(istToday()), created_at: ist(istToday(-2), "10:00:00"), lastActivityAt: ist(istToday(-1), "17:00:00") },
-    { name: "Manish Chawla", city: "Gurugram", scope: "Full 4BHK", budget: 3500000, source: "design-upload", status: "connected", priority: "high", assignedSalesperson: "Priya", followUpAt: ist(istToday(1)), created_at: ist(istToday(-3), "10:00:00"), lastActivityAt: ist(istToday(-1), "16:00:00") },
-    { name: "Rohit Bansal", city: "Noida", scope: "Full 2BHK", budget: 1100000, lo: 1000000, hi: 1250000, source: "design-upload", status: "visit-scheduled", priority: "medium", assignedSalesperson: "Rahul", followUpAt: ist(istToday(), "16:00:00"), siteVisitAt: ist(istToday(), "15:00:00"), created_at: ist("2026-07-07", "12:00:00"), lastActivityAt: ist(istToday(), "09:00:00") },
-    { name: "Deepika Rao", city: "Noida", scope: "3BHK", budget: 1900000, source: "self-estimation", status: "visit-completed", priority: "high", assignedSalesperson: "Rahul", followUpAt: ist(istToday()), siteVisitAt: ist(istToday(-1)), created_at: ist(istToday(-5), "10:00:00"), lastActivityAt: ist(istToday(-1), "18:00:00") },
-    { name: "Amit Sethi", city: "Ghaziabad", scope: "Modular kitchen + wardrobes", budget: 700000, source: "manual", status: "quotation-pending", priority: "medium", assignedSalesperson: "Priya", followUpAt: ist(istToday()), created_at: ist(istToday(-2), "10:00:00"), lastActivityAt: ist(istToday(-2), "15:00:00") },
-    { name: "Harshit Jain", city: "Ghaziabad", scope: "Modular kitchen", budget: 450000, lo: 390000, hi: 480000, expectedRevenue: 420000, source: "design-upload", status: "quotation-sent", priority: "medium", assignedSalesperson: "Rahul", followUpAt: ist(istToday(-1), "11:00:00"), created_at: ist("2026-07-10", "12:00:00"), lastActivityAt: ist(istToday(-2), "12:00:00") },
-    { name: "Sana Qureshi", city: "Delhi", scope: "Master bedroom", budget: 320000, lo: 280000, hi: 350000, expectedRevenue: 300000, source: "self-estimation", status: "negotiation", priority: "low", assignedSalesperson: "Priya", created_at: ist("2026-07-08", "12:00:00"), lastActivityAt: ist(istToday(-3), "12:00:00") },
-    { name: "Farah Khan", city: "Noida", scope: "Full 3BHK", budget: 2500000, source: "self-estimation", status: "lost", priority: "low", assignedSalesperson: "Rahul", created_at: ist(istToday(-6), "10:00:00"), lastActivityAt: ist(istToday(-5), "12:00:00") },
-  ];
-  for (const l of PIPELINE_LEADS) insertLeadRow({ ...l, id: uuid() });
+  // dashboard's "Today's Actions" panel too. Each carries a short activity
+  // history matching its current stage.
+  seedLeadWithHistory(
+    { name: "Vivek Malhotra", city: "Noida", whatsapp: "+919812200011", scope: "Living room", statedBudgetPaise: rupeesToPaise(800000), aiEstimateLowPaise: rupeesToPaise(740000), aiEstimateHighPaise: rupeesToPaise(860000), source: "self-estimation", priority: "medium", interestLevel: "warm", tags: ["self-estimation"], createdAt: ist(istToday(), "09:42:00") },
+    [], null,
+  );
+  seedLeadWithHistory(
+    { name: "Priya Nair", city: "Gurugram", scope: "Full 3BHK", statedBudgetPaise: rupeesToPaise(2200000), aiEstimateLowPaise: rupeesToPaise(1900000), aiEstimateHighPaise: rupeesToPaise(2400000), source: "self-estimation", priority: "high", interestLevel: "hot", tags: ["self-estimation", "high-budget"], createdAt: ist(istToday(), "08:10:00") },
+    [], null,
+  );
+  seedLeadWithHistory(
+    { name: "Rekha Iyer", city: "Faridabad", scope: "2BHK", statedBudgetPaise: rupeesToPaise(600000), source: "manual", priority: "medium", interestLevel: "warm", leadOwner: "Priya", followUpAt: ist(istToday()), createdAt: ist(istToday(-2), "10:00:00") },
+    [{ type: "called", note: "No answer, tried again in the evening", at: ist(istToday(-1), "17:00:00") }],
+    "attempting-contact",
+  );
+  seedLeadWithHistory(
+    { name: "Manish Chawla", city: "Gurugram", whatsapp: "+919812200044", scope: "Full 4BHK", statedBudgetPaise: rupeesToPaise(3500000), source: "design-upload", priority: "high", interestLevel: "hot", leadOwner: "Priya", followUpAt: ist(istToday(1)), tags: ["repeat-referral"], createdAt: ist(istToday(-3), "10:00:00") },
+    [{ type: "called", note: "Spoke for 15 min — very interested, wants a site visit next week", at: ist(istToday(-1), "16:00:00") }],
+    "connected",
+  );
+  seedLeadWithHistory(
+    { name: "Rohit Bansal", city: "Noida", scope: "Full 2BHK", statedBudgetPaise: rupeesToPaise(1100000), aiEstimateLowPaise: rupeesToPaise(1000000), aiEstimateHighPaise: rupeesToPaise(1250000), source: "design-upload", priority: "medium", interestLevel: "warm", leadOwner: "Rahul", followUpAt: ist(istToday(), "16:00:00"), siteVisitAt: ist(istToday(), "15:00:00"), createdAt: ist("2026-07-07", "12:00:00") },
+    [
+      { type: "called", note: "Connected, discussed scope", at: ist("2026-07-08", "11:00:00") },
+      { type: "visit_scheduled", note: `Site visit set for ${istToday()} 3 PM`, at: ist(istToday(-1), "09:00:00") },
+    ],
+    "visit-scheduled",
+  );
+  seedLeadWithHistory(
+    { name: "Deepika Rao", city: "Noida", email: "deepika.rao@example.com", scope: "3BHK", statedBudgetPaise: rupeesToPaise(1900000), source: "self-estimation", priority: "high", interestLevel: "hot", leadOwner: "Rahul", followUpAt: ist(istToday()), siteVisitAt: ist(istToday(-1)), createdAt: ist(istToday(-5), "10:00:00") },
+    [{ type: "visit_completed", note: "Site visit done — needs a quote for full 3BHK + false ceiling", at: ist(istToday(-1), "18:00:00") }],
+    "visit-completed",
+  );
+  seedLeadWithHistory(
+    { name: "Amit Sethi", city: "Ghaziabad", scope: "Modular kitchen + wardrobes", statedBudgetPaise: rupeesToPaise(700000), source: "manual", priority: "medium", interestLevel: "warm", leadOwner: "Priya", followUpAt: ist(istToday()), createdAt: ist(istToday(-2), "10:00:00") },
+    [{ type: "visit_completed", note: "Site visit done, preparing quotation", at: ist(istToday(-2), "15:00:00") }],
+    "quotation-pending",
+  );
+  seedLeadWithHistory(
+    { name: "Harshit Jain", city: "Ghaziabad", scope: "Modular kitchen", statedBudgetPaise: rupeesToPaise(450000), aiEstimateLowPaise: rupeesToPaise(390000), aiEstimateHighPaise: rupeesToPaise(480000), expectedRevenuePaise: rupeesToPaise(420000), source: "design-upload", priority: "medium", interestLevel: "warm", leadOwner: "Rahul", followUpAt: ist(istToday(-1), "11:00:00"), createdAt: ist("2026-07-10", "12:00:00") },
+    [{ type: "quotation_sent", note: "Sent quotation — ₹4.2L", at: ist(istToday(-2), "12:00:00") }],
+    "quotation-sent",
+  );
+  seedLeadWithHistory(
+    { name: "Sana Qureshi", city: "Delhi", scope: "Master bedroom", statedBudgetPaise: rupeesToPaise(320000), aiEstimateLowPaise: rupeesToPaise(280000), aiEstimateHighPaise: rupeesToPaise(350000), expectedRevenuePaise: rupeesToPaise(300000), source: "self-estimation", priority: "low", interestLevel: "warm", leadOwner: "Priya", notes: "Wants to finalize after comparing one more quote from a competitor.", createdAt: ist("2026-07-08", "12:00:00") },
+    [
+      { type: "quotation_sent", note: "Sent quotation — ₹3.0L", at: ist(istToday(-4), "12:00:00") },
+      { type: "status_changed", note: "Quotation Sent → Negotiation", at: ist(istToday(-3), "12:00:00") },
+    ],
+    "negotiation",
+  );
+  seedLeadWithHistory(
+    { name: "Farah Khan", city: "Noida", scope: "Full 3BHK", statedBudgetPaise: rupeesToPaise(2500000), source: "self-estimation", priority: "low", interestLevel: "cold", leadOwner: "Rahul", notes: "Went with a competitor over price.", tags: ["lost-to-competitor"], createdAt: ist(istToday(-6), "10:00:00") },
+    [{ type: "status_changed", note: "Negotiation → Lost", at: ist(istToday(-5), "12:00:00") }],
+    "lost",
+  );
 
   // ── Suggestions (DCR-101) ──
   const insertSuggestion = db.prepare(`INSERT INTO suggestions (id, project_id, title, description, price_note, status) VALUES (?,?,?,?,?,?)`);

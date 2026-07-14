@@ -5,6 +5,7 @@ import { requireAuth, requireRole, loadOwnProject } from "../middleware/auth.js"
 import { notify } from "../services/notify.js";
 import { recomputeProgress } from "../services/progress.js";
 import { createProjectForClient, ApiError } from "../services/projects.js";
+import { createLead } from "../services/leads.js";
 import * as S from "../services/serialize.js";
 
 const router = Router();
@@ -200,11 +201,11 @@ router.post("/:id/messages", requireAuth, (req, res) => {
     );
     if (attachmentPath) {
       // A reference-design upload from chat doubles as a CRM activity signal.
-      db.prepare(`
-        INSERT INTO leads (id, name, city, phone, scope, source, status, search_data, created_at)
-        VALUES (?,?,?,?,?,'design-upload','connected',?,strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-      `).run(uuid(), req.user.name, null, req.user.phone, `Reference design shared in chat — ${project.name}`,
-        JSON.stringify({ projectId: project.id, attachmentPath }));
+      createLead({
+        name: req.user.name, phone: req.user.phone, scope: `Reference design shared in chat — ${project.name}`,
+        source: "design-upload", status: "connected",
+        searchData: { projectId: project.id, attachmentPath },
+      });
     }
   } else {
     notify(project.client_user_id, { title: "New message from Decoory Team", body: text || "Sent an attachment", type: "chat", data: { projectId: project.id } });

@@ -99,30 +99,56 @@ CREATE TABLE IF NOT EXISTS materials (
 -- Sales Pipeline (admin/SalesPipeline.jsx, Kanban) — every lead lives here
 -- until it either closes ('advance-received' auto-converts to a project,
 -- see services/projects.js) or is marked 'lost'. `status` is the Kanban
--- column a lead's card sits in.
+-- column a lead's card sits in ("Lead Status"). Every interaction is
+-- recorded append-only in lead_activities below (services/leads.js) — no
+-- route ever edits or deletes an activity, so the timeline is a true history.
 CREATE TABLE IF NOT EXISTS leads (
   id                     TEXT PRIMARY KEY,
+  lead_code              TEXT UNIQUE,                -- e.g. LD-001, human-readable
   name                   TEXT NOT NULL,
-  city                   TEXT,
   phone                  TEXT,
-  scope                  TEXT,                     -- also displayed as "property type" on Kanban cards
+  whatsapp               TEXT,
+  email                  TEXT,
+  address                TEXT,
+  city                   TEXT,
+  scope                  TEXT,                       -- also displayed as "property type"
   stated_budget_paise    INTEGER,
   ai_estimate_low_paise  INTEGER,
   ai_estimate_high_paise INTEGER,
-  expected_revenue_paise INTEGER,                  -- sales-qualified deal size, set once budget firms up
-  source                 TEXT NOT NULL CHECK (source IN ('self-estimation','design-upload','manual')),
+  expected_revenue_paise INTEGER,                    -- sales-qualified deal size, set once budget firms up
+  source                 TEXT NOT NULL CHECK (source IN (
+                            'self-estimation','design-upload','manual','facebook','google','referral','website'
+                          )),
   status                 TEXT NOT NULL DEFAULT 'new-lead' CHECK (status IN (
                             'new-lead','attempting-contact','connected','visit-scheduled','visit-completed',
                             'quotation-pending','quotation-sent','negotiation','advance-received','won','lost'
                           )),
   priority               TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low','medium','high')),
-  assigned_salesperson   TEXT,
-  search_data            TEXT,                     -- JSON blob of everything the user entered
-  follow_up_at           TEXT,                     -- next follow-up call/touchpoint due (admin-set)
-  site_visit_at          TEXT,                      -- scheduled site visit (admin-set)
-  last_activity_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), -- touched on every edit
+  interest_level         TEXT NOT NULL DEFAULT 'warm' CHECK (interest_level IN ('hot','warm','cold')),
+  lead_owner              TEXT,
+  notes                  TEXT,
+  tags                    TEXT,                      -- JSON array of strings
+  search_data            TEXT,                       -- JSON blob of everything the user entered
+  follow_up_at           TEXT,                       -- Next Follow Up Date
+  site_visit_at          TEXT,                        -- scheduled site visit (admin-set)
+  last_contact_date      TEXT,                        -- most recent logged activity's timestamp
   converted_project_id   TEXT REFERENCES projects(id), -- set once this lead auto-converts (status = 'advance-received')
   created_at             TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- Append-only interaction history for a lead — see services/leads.js's
+-- logActivity(). No route exposes update/delete for this table by design.
+CREATE TABLE IF NOT EXISTS lead_activities (
+  id          TEXT PRIMARY KEY,
+  lead_id     TEXT NOT NULL REFERENCES leads(id),
+  type        TEXT NOT NULL CHECK (type IN (
+                'lead_created','whatsapp_sent','called','emailed','follow_up',
+                'visit_scheduled','visit_completed','quotation_sent','status_changed',
+                'note','advance_received','other'
+              )),
+  note        TEXT,
+  created_by  TEXT,                                  -- admin display name at time of logging
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -165,6 +191,7 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+CREATE INDEX IF NOT EXISTS idx_lead_activities_lead ON lead_activities(lead_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_project ON milestones(project_id);
 CREATE INDEX IF NOT EXISTS idx_daily_updates_project ON daily_updates(project_id);
 CREATE INDEX IF NOT EXISTS idx_payments_project ON payments(project_id);

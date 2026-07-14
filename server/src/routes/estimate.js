@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { v4 as uuid } from "uuid";
-import db from "../db/index.js";
 import { estimateBudget } from "../services/anthropic.js";
 import { notifyAllAdmins } from "../services/notify.js";
+import { createLead } from "../services/leads.js";
 import { rupeesToPaise } from "../utils/money.js";
 
 const router = Router();
@@ -17,25 +16,22 @@ router.post("/", async (req, res) => {
     city, roomType, sizeSqft: Number(sizeSqft) || null, statedBudget: Number(statedBudget) || null, stylePreferences,
   });
 
-  const id = uuid();
-  db.prepare(`
-    INSERT INTO leads (id, name, city, phone, scope, stated_budget_paise, ai_estimate_low_paise, ai_estimate_high_paise, source, status, search_data)
-    VALUES (@id,@name,@city,@phone,@scope,@statedBudgetPaise,@estimateLowPaise,@estimateHighPaise,'self-estimation','new-lead',@searchData)
-  `).run({
-    id, name: name || "Website visitor", city: city || null, phone: phone || null, scope: roomType,
+  const lead = createLead({
+    name: name || "Website visitor", city, phone, scope: roomType,
     statedBudgetPaise: statedBudget ? rupeesToPaise(Number(statedBudget)) : null,
-    estimateLowPaise: estimate.estimateLowPaise, estimateHighPaise: estimate.estimateHighPaise,
-    searchData: JSON.stringify({ name, phone, city, roomType, sizeSqft, statedBudget, stylePreferences }),
+    aiEstimateLowPaise: estimate.estimateLowPaise, aiEstimateHighPaise: estimate.estimateHighPaise,
+    source: "self-estimation",
+    searchData: { name, phone, city, roomType, sizeSqft, statedBudget, stylePreferences },
   });
 
   notifyAllAdmins({
     title: "New self-estimation lead",
     body: `${name || "A visitor"} — ${roomType} in ${city || "unspecified city"}`,
     type: "lead",
-    data: { leadId: id },
+    data: { leadId: lead.id },
   });
 
-  res.status(201).json({ leadId: id, estimate });
+  res.status(201).json({ leadId: lead.id, estimate });
 });
 
 export default router;

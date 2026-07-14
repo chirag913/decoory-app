@@ -30,6 +30,11 @@ export const STATUS_STYLE = {
   low: { bg: "#ECEAE2", fg: "#6E6A5E", label: "Low" },
   medium: { bg: "#F6ECD8", fg: "#A8741A", label: "Medium" },
   high: { bg: "#F6E0DA", fg: "#B3452E", label: "High" },
+
+  // Lead interest level
+  hot: { bg: "#F6E0DA", fg: "#B3452E", label: "Hot" },
+  warm: { bg: "#F6ECD8", fg: "#A8741A", label: "Warm" },
+  cold: { bg: "#E3EDF5", fg: "#3B6E96", label: "Cold" },
 };
 
 export const MATERIAL_COLORS = {

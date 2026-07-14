@@ -4,8 +4,11 @@ import { formatINR, formatDate } from "../shared/format.js";
 import { Avatar, Chip, Spinner } from "../shared/ui.jsx";
 import LeadDrawer from "./LeadDrawer.jsx";
 
+const SOURCES = ["manual", "facebook", "google", "referral", "website"];
+const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website" };
+
 function AddLeadForm({ onAdded, onClose }) {
-  const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "" });
+  const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "", source: "manual" });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -14,7 +17,7 @@ function AddLeadForm({ onAdded, onClose }) {
     try {
       await api.post("/leads", {
         name: form.name, city: form.city || null, phone: form.phone || null, scope: form.scope || null,
-        statedBudgetPaise: form.budget ? Math.round(Number(form.budget) * 100) : null, source: "manual",
+        statedBudgetPaise: form.budget ? Math.round(Number(form.budget) * 100) : null, source: form.source,
       });
       onAdded();
       onClose();
@@ -32,6 +35,9 @@ function AddLeadForm({ onAdded, onClose }) {
         <input className="dk-input" style={{ width: 160 }} placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
         <input className="dk-input" style={{ width: 180 }} placeholder="Property type, e.g. 3BHK" value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })} />
         <input className="dk-input" style={{ width: 140 }} type="number" placeholder="Budget (₹)" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+        <select className="dk-select" style={{ width: 140 }} value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
+          {SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
+        </select>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button className="dk-btn" disabled={saving || !form.name} onClick={save}>{saving ? "Saving…" : "Add lead"}</button>
@@ -78,10 +84,10 @@ export default function Leads() {
       {adding && <div style={{ marginTop: 16 }}><AddLeadForm onAdded={load} onClose={() => setAdding(false)} /></div>}
 
       <div className="dk-card" style={{ marginTop: 16, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 640 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 720 }}>
           <thead>
             <tr style={{ textAlign: "left", color: "var(--mut)", fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em" }}>
-              {["Lead", "Scope", "Their budget", "Expected revenue", "Source", "When", "Stage"].map((h) => (
+              {["Lead", "Scope", "Their budget", "Expected revenue", "Owner", "Source", "When", "Stage"].map((h) => (
                 <th key={h} style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>{h}</th>
               ))}
             </tr>
@@ -89,10 +95,18 @@ export default function Leads() {
           <tbody>
             {leads.map((l) => (
               <tr key={l.id} className="dk-row" style={{ borderBottom: "1px solid var(--line)", cursor: "pointer" }} onClick={() => setOpenLead(l)}>
-                <td style={{ padding: "11px 16px", display: "flex", gap: 10, alignItems: "center" }}><Avatar name={l.name} /><div><b>{l.name}</b><div style={{ fontSize: 12, color: "var(--mut)" }}>{l.city || "—"}</div></div></td>
+                <td style={{ padding: "11px 16px", display: "flex", gap: 10, alignItems: "center" }}>
+                  <Avatar name={l.name} />
+                  <div>
+                    <div style={{ fontSize: 10.5, color: "var(--mut)", fontWeight: 700 }}>{l.leadCode}</div>
+                    <b>{l.name}</b>
+                    <div style={{ fontSize: 12, color: "var(--mut)" }}>{l.city || "—"}</div>
+                  </div>
+                </td>
                 <td style={{ padding: "11px 16px" }}>{l.scope || "—"}</td>
                 <td style={{ padding: "11px 16px" }}>{formatINR(l.statedBudgetPaise)}</td>
                 <td style={{ padding: "11px 16px" }}>{formatINR(l.expectedRevenuePaise)}</td>
+                <td style={{ padding: "11px 16px", fontSize: 12.5, color: "var(--mut)" }}>{l.leadOwner || "—"}</td>
                 <td style={{ padding: "11px 16px", fontSize: 12.5, color: "var(--mut)" }}>{l.source.replace("-", " ")}</td>
                 <td style={{ padding: "11px 16px", fontSize: 12.5, color: "var(--mut)" }}>{formatDate(l.createdAt)}</td>
                 <td style={{ padding: "11px 16px" }}><Chip status={l.status} /></td>

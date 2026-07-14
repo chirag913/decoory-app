@@ -93,9 +93,13 @@ export function teamMember(row) {
 export function lead(row) {
   return {
     id: row.id,
+    leadCode: row.lead_code,
     name: row.name,
-    city: row.city,
     phone: row.phone,
+    whatsapp: row.whatsapp,
+    email: row.email,
+    address: row.address,
+    city: row.city,
     scope: row.scope,
     statedBudgetPaise: row.stated_budget_paise,
     aiEstimateLowPaise: row.ai_estimate_low_paise,
@@ -104,12 +108,26 @@ export function lead(row) {
     source: row.source,
     status: row.status,
     priority: row.priority,
-    assignedSalesperson: row.assigned_salesperson,
+    interestLevel: row.interest_level,
+    leadOwner: row.lead_owner,
+    notes: row.notes,
+    tags: row.tags ? JSON.parse(row.tags) : [],
     searchData: row.search_data ? JSON.parse(row.search_data) : null,
     followUpAt: row.follow_up_at,
     siteVisitAt: row.site_visit_at,
-    lastActivityAt: row.last_activity_at,
+    lastContactDate: row.last_contact_date,
     convertedProjectId: row.converted_project_id,
+    createdAt: row.created_at,
+  };
+}
+
+export function leadActivity(row) {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    type: row.type,
+    note: row.note,
+    createdBy: row.created_by,
     createdAt: row.created_at,
   };
 }
