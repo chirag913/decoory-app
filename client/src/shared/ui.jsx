@@ -9,12 +9,27 @@ export const STATUS_STYLE = {
   scheduled: { bg: "#ECEAE2", fg: "#6E6A5E", label: "Scheduled" },
   "on-track": { bg: "#E4EFE8", fg: "#3E7A5B", label: "On track" },
   attention: { bg: "#F6ECD8", fg: "#A8741A", label: "Needs attention" },
-  new: { bg: "#EAE4F2", fg: "#6B4FA1", label: "New" },
-  contacted: { bg: "#F6ECD8", fg: "#A8741A", label: "Contacted" },
-  qualified: { bg: "#E4EFE8", fg: "#3E7A5B", label: "Qualified" },
   sent: { bg: "#ECEAE2", fg: "#6E6A5E", label: "Sent" },
   interested: { bg: "#E4EFE8", fg: "#3E7A5B", label: "Interested" },
   dismissed: { bg: "#ECEAE2", fg: "#6E6A5E", label: "Maybe later" },
+
+  // Sales Pipeline stages (client/shared/leadStages.js)
+  "new-lead": { bg: "#EAE4F2", fg: "#6B4FA1", label: "New Lead" },
+  "attempting-contact": { bg: "#E3EDF5", fg: "#3B6E96", label: "Attempting Contact" },
+  connected: { bg: "#E0F0EC", fg: "#2E7D6B", label: "Connected" },
+  "visit-scheduled": { bg: "#F6ECD8", fg: "#A8741A", label: "Visit Scheduled" },
+  "visit-completed": { bg: "#F0E4CE", fg: "#8C6420", label: "Visit Completed" },
+  "quotation-pending": { bg: "#F3E2D6", fg: "#A85A2E", label: "Quotation Pending" },
+  "quotation-sent": { bg: "#EDE2CE", fg: "#8C6F20", label: "Quotation Sent" },
+  negotiation: { bg: "#F0DCC9", fg: "#95541E", label: "Negotiation" },
+  "advance-received": { bg: "#DCEAE0", fg: "#2F6B49", label: "Advance Received" },
+  won: { bg: "#E4EFE8", fg: "#3E7A5B", label: "Won" },
+  lost: { bg: "#F0E4E0", fg: "#8C6A63", label: "Lost" },
+
+  // Lead priority
+  low: { bg: "#ECEAE2", fg: "#6E6A5E", label: "Low" },
+  medium: { bg: "#F6ECD8", fg: "#A8741A", label: "Medium" },
+  high: { bg: "#F6E0DA", fg: "#B3452E", label: "High" },
 };
 
 export const MATERIAL_COLORS = {

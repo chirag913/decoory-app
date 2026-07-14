@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS projects (
   today_team      TEXT DEFAULT '',
   pin             TEXT,                          -- PIN issued at booking, paired with `code` for client login
   completed_at    TEXT,                          -- set/cleared automatically when progress_pct crosses 100 (services/progress.js)
+  source_lead_id  TEXT REFERENCES leads(id),      -- set when created via Sales Pipeline auto-conversion (services/projects.js)
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -95,22 +96,33 @@ CREATE TABLE IF NOT EXISTS materials (
   info_url    TEXT
 );
 
+-- Sales Pipeline (admin/SalesPipeline.jsx, Kanban) — every lead lives here
+-- until it either closes ('advance-received' auto-converts to a project,
+-- see services/projects.js) or is marked 'lost'. `status` is the Kanban
+-- column a lead's card sits in.
 CREATE TABLE IF NOT EXISTS leads (
-  id                    TEXT PRIMARY KEY,
-  name                  TEXT NOT NULL,
-  city                  TEXT,
-  phone                 TEXT,
-  scope                 TEXT,
-  stated_budget_paise   INTEGER,
+  id                     TEXT PRIMARY KEY,
+  name                   TEXT NOT NULL,
+  city                   TEXT,
+  phone                  TEXT,
+  scope                  TEXT,                     -- also displayed as "property type" on Kanban cards
+  stated_budget_paise    INTEGER,
   ai_estimate_low_paise  INTEGER,
   ai_estimate_high_paise INTEGER,
-  source                TEXT NOT NULL CHECK (source IN ('self-estimation','design-upload','manual')),
-  status                TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','contacted','qualified')),
-  search_data           TEXT,                     -- JSON blob of everything the user entered
-  follow_up_at          TEXT,                     -- next follow-up call/touchpoint due (admin-set)
-  site_visit_at         TEXT,                     -- scheduled site visit (admin-set)
-  quote_status          TEXT NOT NULL DEFAULT 'none' CHECK (quote_status IN ('none','sent','accepted','declined')),
-  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  expected_revenue_paise INTEGER,                  -- sales-qualified deal size, set once budget firms up
+  source                 TEXT NOT NULL CHECK (source IN ('self-estimation','design-upload','manual')),
+  status                 TEXT NOT NULL DEFAULT 'new-lead' CHECK (status IN (
+                            'new-lead','attempting-contact','connected','visit-scheduled','visit-completed',
+                            'quotation-pending','quotation-sent','negotiation','advance-received','won','lost'
+                          )),
+  priority               TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low','medium','high')),
+  assigned_salesperson   TEXT,
+  search_data            TEXT,                     -- JSON blob of everything the user entered
+  follow_up_at           TEXT,                     -- next follow-up call/touchpoint due (admin-set)
+  site_visit_at          TEXT,                      -- scheduled site visit (admin-set)
+  last_activity_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')), -- touched on every edit
+  converted_project_id   TEXT REFERENCES projects(id), -- set once this lead auto-converts (status = 'advance-received')
+  created_at             TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
 CREATE TABLE IF NOT EXISTS messages (

@@ -60,7 +60,7 @@ export default function Overview() {
   const dateOf = (iso) => (iso ? iso.slice(0, 10) : null);
 
   const newLeadsToday = leads.filter((l) => dateOf(l.createdAt) === today);
-  const needFirstCall = leads.filter((l) => l.status === "new");
+  const needFirstCall = leads.filter((l) => l.status === "new-lead");
   const oldestNewLeadHours = needFirstCall.length
     ? Math.max(...needFirstCall.map((l) => (Date.now() - new Date(l.createdAt).getTime()) / 3600000))
     : 0;
@@ -70,7 +70,7 @@ export default function Overview() {
 
   const siteVisitsToday = leads.filter((l) => l.siteVisitAt && dateOf(l.siteVisitAt) === today);
 
-  const quotesPending = leads.filter((l) => l.quoteStatus === "sent");
+  const quotesPending = leads.filter((l) => l.status === "quotation-pending");
 
   const overduePayments = payments.filter((p) => p.status === "overdue");
   const upcomingPayments = payments.filter((p) => p.status === "upcoming");
@@ -102,28 +102,28 @@ export default function Overview() {
           count={needFirstCall.length}
           detail={needFirstCall.length ? needFirstCall.slice(0, 3).map((l) => l.name).join(" · ") : "Nothing waiting"}
           priority={needFirstCall.length === 0 ? "ok" : oldestNewLeadHours > 24 ? "bad" : "warn"}
-          onClick={() => navigate("leads")}
+          onClick={() => navigate("projects")}
         />
         <ActionRow
           icon="📞" label="Follow ups due"
           count={followUpsDue.length}
           detail={followUpsDue.length ? followUpsDue.slice(0, 3).map((l) => l.name).join(" · ") : "Nothing due"}
           priority={followUpsDue.length === 0 ? "ok" : followUpsOverdue.length > 0 ? "bad" : "warn"}
-          onClick={() => navigate("leads")}
+          onClick={() => navigate("projects")}
         />
         <ActionRow
           icon="📅" label="Site visits today"
           count={siteVisitsToday.length}
           detail={siteVisitsToday.length ? siteVisitsToday.slice(0, 3).map((l) => l.name).join(" · ") : "None scheduled"}
           priority={siteVisitsToday.length === 0 ? "ok" : "warn"}
-          onClick={() => navigate("leads")}
+          onClick={() => navigate("projects")}
         />
         <ActionRow
           icon="📄" label="Quotations pending"
           count={quotesPending.length}
           detail={quotesPending.length ? quotesPending.slice(0, 3).map((l) => l.name).join(" · ") : "Nothing pending"}
           priority={quotesPending.length === 0 ? "ok" : "warn"}
-          onClick={() => navigate("leads")}
+          onClick={() => navigate("projects")}
         />
         <ActionRow
           icon="💰" label="Payments to collect"
@@ -139,7 +139,7 @@ export default function Overview() {
         <div className="serif" style={{ fontSize: 18, fontWeight: 600, margin: "2px 0 12px" }}>How the business is doing</div>
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           <Stat label="Monthly revenue" value={formatINR(snapshot.monthlyRevenuePaise)} sub="Collected this month" />
-          <Stat label="Lead conversion" value={`${snapshot.leadConversionPct}%`} sub="Qualified ÷ total leads" />
+          <Stat label="Lead conversion" value={`${snapshot.leadConversionPct}%`} sub="Advance received ÷ total leads" />
           <Stat label="Avg. project value" value={formatINR(snapshot.avgProjectValuePaise)} sub={`Across ${projects.length} project${projects.length === 1 ? "" : "s"}`} />
           <Stat label="Completed this month" value={snapshot.projectsCompletedThisMonth} sub="Projects handed over" />
           <Stat label="Google reviews" value="—" sub="Connect Google Business Profile" />

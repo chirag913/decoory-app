@@ -28,8 +28,8 @@ router.get("/summary", requireAuth, requireRole("admin"), (req, res) => {
     WHERE status = 'paid' AND strftime('%Y-%m', paid_at) = strftime('%Y-%m', 'now', '+5 hours', '+30 minutes')
   `).get().total;
 
-  const leadCounts = db.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'qualified' THEN 1 ELSE 0 END) as qualified FROM leads`).get();
-  const leadConversionPct = leadCounts.total > 0 ? Math.round((leadCounts.qualified / leadCounts.total) * 100) : 0;
+  const leadCounts = db.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN status IN ('advance-received','won') THEN 1 ELSE 0 END) as converted FROM leads`).get();
+  const leadConversionPct = leadCounts.total > 0 ? Math.round((leadCounts.converted / leadCounts.total) * 100) : 0;
 
   const avgProjectValuePaise = db.prepare(`SELECT COALESCE(AVG(budget_paise), 0) as avg FROM projects`).get().avg;
 

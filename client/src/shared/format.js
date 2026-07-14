@@ -50,6 +50,20 @@ export function greeting() {
   return "Good evening";
 }
 
+// Compact relative-time string for Kanban cards' "Last Activity" field.
+export function timeAgo(iso) {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return formatDate(iso);
+}
+
 export function greetingEmoji() {
   const hour = new Date().getHours();
   if (hour < 12) return "☀️";

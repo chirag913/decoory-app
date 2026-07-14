@@ -20,7 +20,7 @@ router.post("/", async (req, res) => {
   const id = uuid();
   db.prepare(`
     INSERT INTO leads (id, name, city, phone, scope, stated_budget_paise, ai_estimate_low_paise, ai_estimate_high_paise, source, status, search_data)
-    VALUES (@id,@name,@city,@phone,@scope,@statedBudgetPaise,@estimateLowPaise,@estimateHighPaise,'self-estimation','new',@searchData)
+    VALUES (@id,@name,@city,@phone,@scope,@statedBudgetPaise,@estimateLowPaise,@estimateHighPaise,'self-estimation','new-lead',@searchData)
   `).run({
     id, name: name || "Website visitor", city: city || null, phone: phone || null, scope: roomType,
     statedBudgetPaise: statedBudget ? rupeesToPaise(Number(statedBudget)) : null,
