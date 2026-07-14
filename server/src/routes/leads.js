@@ -30,13 +30,16 @@ router.post("/", requireAuth, requireRole("admin"), (req, res) => {
 router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   const row = db.prepare("SELECT * FROM leads WHERE id = ?").get(req.params.id);
   if (!row) return res.status(404).json({ error: "Lead not found" });
-  const { status, name, city, phone, scope } = req.body;
+  const { status, name, city, phone, scope, followUpAt, siteVisitAt, quoteStatus } = req.body;
   db.prepare(`
     UPDATE leads SET
       status = COALESCE(@status, status), name = COALESCE(@name, name),
-      city = COALESCE(@city, city), phone = COALESCE(@phone, phone), scope = COALESCE(@scope, scope)
+      city = COALESCE(@city, city), phone = COALESCE(@phone, phone), scope = COALESCE(@scope, scope),
+      follow_up_at = CASE WHEN @followUpAt IS NULL THEN follow_up_at ELSE NULLIF(@followUpAt, '') END,
+      site_visit_at = CASE WHEN @siteVisitAt IS NULL THEN site_visit_at ELSE NULLIF(@siteVisitAt, '') END,
+      quote_status = COALESCE(@quoteStatus, quote_status)
     WHERE id = @id
-  `).run(normalizeParams({ id: row.id, status, name, city, phone, scope }));
+  `).run(normalizeParams({ id: row.id, status, name, city, phone, scope, followUpAt, siteVisitAt, quoteStatus }));
   res.json({ lead: S.lead(db.prepare("SELECT * FROM leads WHERE id = ?").get(row.id)) });
 });
 

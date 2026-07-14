@@ -4,6 +4,7 @@ import { formatINR, formatDate } from "../shared/format.js";
 import { Avatar, Chip, Spinner } from "../shared/ui.jsx";
 
 const STATUS_ORDER = ["new", "contacted", "qualified"];
+const QUOTE_STATUSES = ["none", "sent", "accepted", "declined"];
 
 function AddLeadForm({ onAdded, onClose }) {
   const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "" });
@@ -42,7 +43,7 @@ function AddLeadForm({ onAdded, onClose }) {
   );
 }
 
-function LeadDrawer({ lead, onClose, onStatusChange, onDelete }) {
+function LeadDrawer({ lead, onClose, onStatusChange, onFieldChange, onDelete }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(30,38,34,.4)", zIndex: 100, display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
       <div className="dk-card" style={{ width: 420, maxWidth: "90vw", height: "100%", borderRadius: 0, padding: 24, overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
@@ -75,6 +76,32 @@ function LeadDrawer({ lead, onClose, onStatusChange, onDelete }) {
           </div>
         </div>
 
+        <div style={{ marginTop: 18, display: "flex", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div className="dk-eyebrow" style={{ marginBottom: 8 }}>Next follow-up</div>
+            <input
+              className="dk-input" type="date" value={lead.followUpAt ? lead.followUpAt.slice(0, 10) : ""}
+              onChange={(e) => onFieldChange(lead.id, "followUpAt", e.target.value)}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="dk-eyebrow" style={{ marginBottom: 8 }}>Site visit</div>
+            <input
+              className="dk-input" type="date" value={lead.siteVisitAt ? lead.siteVisitAt.slice(0, 10) : ""}
+              onChange={(e) => onFieldChange(lead.id, "siteVisitAt", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div className="dk-eyebrow" style={{ marginBottom: 8 }}>Quotation status</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {QUOTE_STATUSES.map((s) => (
+              <button key={s} className={`dk-btn ${lead.quoteStatus === s ? "" : "ghost"}`} onClick={() => onFieldChange(lead.id, "quoteStatus", s)}>{s}</button>
+            ))}
+          </div>
+        </div>
+
         {lead.searchData && (
           <div style={{ marginTop: 18 }}>
             <div className="dk-eyebrow" style={{ marginBottom: 8 }}>Everything they entered</div>
@@ -98,6 +125,12 @@ export default function Leads() {
 
   const setStatus = async (id, status) => {
     const { lead } = await api.patch(`/leads/${id}`, { status });
+    setLeads((ls) => ls.map((l) => (l.id === id ? lead : l)));
+    setOpenLead(lead);
+  };
+
+  const updateField = async (id, field, value) => {
+    const { lead } = await api.patch(`/leads/${id}`, { [field]: value });
     setLeads((ls) => ls.map((l) => (l.id === id ? lead : l)));
     setOpenLead(lead);
   };
@@ -148,7 +181,7 @@ export default function Leads() {
         </table>
       </div>
 
-      {openLead && <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStatusChange={setStatus} onDelete={removeLead} />}
+      {openLead && <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onStatusChange={setStatus} onFieldChange={updateField} onDelete={removeLead} />}
     </div>
   );
 }

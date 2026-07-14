@@ -48,6 +48,12 @@ function explicitMedia(entries) {
 // mixing offset styles as raw strings breaks lexicographic ORDER BY.
 const ist = (dateStr, time = "18:00:00") => new Date(`${dateStr}T${time}+05:30`).toISOString();
 
+// Today's IST calendar date (offsetDays lets callers get yesterday/tomorrow) —
+// used for the dashboard's "today"-scoped seed data (new leads, follow-ups,
+// site visits) so they show real, non-zero numbers whenever seed is re-run,
+// not just on the one fixed date the rest of the seed narrative assumes.
+const istToday = (offsetDays = 0) => new Date(Date.now() + offsetDays * 86400000 + 5.5 * 3600000).toISOString().slice(0, 10);
+
 function run() {
   wipe();
   const passwordHash = bcrypt.hashSync(DEV_PASSWORD, 10);
@@ -251,22 +257,25 @@ function run() {
   }
 
   // ── Leads ──
+  // followUp/siteVisit/quoteStatus feed the Overview dashboard's "Today's
+  // Actions" panel — see admin/Overview.jsx.
   const insertLead = db.prepare(`
-    INSERT INTO leads (id, name, city, phone, scope, stated_budget_paise, ai_estimate_low_paise, ai_estimate_high_paise, source, status, search_data, created_at)
-    VALUES (@id,@name,@city,@phone,@scope,@stated_budget_paise,@ai_estimate_low_paise,@ai_estimate_high_paise,@source,@status,@search_data,@created_at)
+    INSERT INTO leads (id, name, city, phone, scope, stated_budget_paise, ai_estimate_low_paise, ai_estimate_high_paise, source, status, search_data, follow_up_at, site_visit_at, quote_status, created_at)
+    VALUES (@id,@name,@city,@phone,@scope,@stated_budget_paise,@ai_estimate_low_paise,@ai_estimate_high_paise,@source,@status,@search_data,@follow_up_at,@site_visit_at,@quote_status,@created_at)
   `);
   const LEADS = [
-    { name: "Vivek Malhotra", city: "Noida", scope: "Living room", budget: 800000, lo: 740000, hi: 860000, source: "self-estimation", status: "new", created_at: ist("2026-07-11", "09:42:00") },
-    { name: "Priya Nair", city: "Gurugram", scope: "Full 3BHK", budget: 2200000, lo: 1900000, hi: 2400000, source: "self-estimation", status: "new", created_at: ist("2026-07-11", "08:10:00") },
-    { name: "Harshit Jain", city: "Ghaziabad", scope: "Modular kitchen", budget: 450000, lo: 390000, hi: 480000, source: "design-upload", status: "contacted", created_at: ist("2026-07-10", "12:00:00") },
-    { name: "Sana Qureshi", city: "Delhi", scope: "Master bedroom", budget: 320000, lo: 280000, hi: 350000, source: "self-estimation", status: "qualified", created_at: ist("2026-07-08", "12:00:00") },
-    { name: "Rohit Bansal", city: "Noida", scope: "Full 2BHK", budget: 1100000, lo: 1000000, hi: 1250000, source: "design-upload", status: "contacted", created_at: ist("2026-07-07", "12:00:00") },
+    { name: "Vivek Malhotra", city: "Noida", scope: "Living room", budget: 800000, lo: 740000, hi: 860000, source: "self-estimation", status: "new", quoteStatus: "none", created_at: ist(istToday(), "09:42:00") },
+    { name: "Priya Nair", city: "Gurugram", scope: "Full 3BHK", budget: 2200000, lo: 1900000, hi: 2400000, source: "self-estimation", status: "new", quoteStatus: "none", created_at: ist(istToday(), "08:10:00") },
+    { name: "Harshit Jain", city: "Ghaziabad", scope: "Modular kitchen", budget: 450000, lo: 390000, hi: 480000, source: "design-upload", status: "contacted", quoteStatus: "sent", followUpAt: ist(istToday(-1), "11:00:00"), created_at: ist("2026-07-10", "12:00:00") },
+    { name: "Sana Qureshi", city: "Delhi", scope: "Master bedroom", budget: 320000, lo: 280000, hi: 350000, source: "self-estimation", status: "qualified", quoteStatus: "accepted", created_at: ist("2026-07-08", "12:00:00") },
+    { name: "Rohit Bansal", city: "Noida", scope: "Full 2BHK", budget: 1100000, lo: 1000000, hi: 1250000, source: "design-upload", status: "contacted", quoteStatus: "sent", followUpAt: ist(istToday(), "16:00:00"), siteVisitAt: ist(istToday(), "15:00:00"), created_at: ist("2026-07-07", "12:00:00") },
   ];
   for (const l of LEADS) {
     insertLead.run({
       id: uuid(), name: l.name, city: l.city, phone: null, scope: l.scope,
       stated_budget_paise: rupeesToPaise(l.budget), ai_estimate_low_paise: rupeesToPaise(l.lo), ai_estimate_high_paise: rupeesToPaise(l.hi),
       source: l.source, status: l.status,
+      follow_up_at: l.followUpAt || null, site_visit_at: l.siteVisitAt || null, quote_status: l.quoteStatus,
       search_data: JSON.stringify({ city: l.city, scope: l.scope, statedBudgetPaise: rupeesToPaise(l.budget), source: l.source }),
       created_at: l.created_at,
     });

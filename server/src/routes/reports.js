@@ -22,7 +22,31 @@ router.get("/summary", requireAuth, requireRole("admin"), (req, res) => {
     GROUP BY p.id ORDER BY p.code ASC
   `).all();
 
-  res.json({ paymentsByMonth, leadsBySource, updateCompliance });
+  // ── Business Snapshot (Overview dashboard) ──
+  const monthlyRevenuePaise = db.prepare(`
+    SELECT COALESCE(SUM(amount_paise), 0) as total FROM payments
+    WHERE status = 'paid' AND strftime('%Y-%m', paid_at) = strftime('%Y-%m', 'now', '+5 hours', '+30 minutes')
+  `).get().total;
+
+  const leadCounts = db.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'qualified' THEN 1 ELSE 0 END) as qualified FROM leads`).get();
+  const leadConversionPct = leadCounts.total > 0 ? Math.round((leadCounts.qualified / leadCounts.total) * 100) : 0;
+
+  const avgProjectValuePaise = db.prepare(`SELECT COALESCE(AVG(budget_paise), 0) as avg FROM projects`).get().avg;
+
+  const projectsCompletedThisMonth = db.prepare(`
+    SELECT COUNT(*) as n FROM projects
+    WHERE completed_at IS NOT NULL AND strftime('%Y-%m', completed_at) = strftime('%Y-%m', 'now', '+5 hours', '+30 minutes')
+  `).get().n;
+
+  res.json({
+    paymentsByMonth, leadsBySource, updateCompliance,
+    businessSnapshot: {
+      monthlyRevenuePaise,
+      leadConversionPct,
+      avgProjectValuePaise: Math.round(avgProjectValuePaise),
+      projectsCompletedThisMonth,
+    },
+  });
 });
 
 export default router;

@@ -17,6 +17,7 @@ export function projectSummary(p) {
     currentStage: p.current_stage,
     startDate: p.start_date,
     handoverDate: p.handover_date,
+    completedAt: p.completed_at,
     health: p.health,
     todayPlan: p.today_plan,
     todayTeam: p.today_team,
@@ -101,6 +102,9 @@ export function lead(row) {
     source: row.source,
     status: row.status,
     searchData: row.search_data ? JSON.parse(row.search_data) : null,
+    followUpAt: row.follow_up_at,
+    siteVisitAt: row.site_visit_at,
+    quoteStatus: row.quote_status,
     createdAt: row.created_at,
   };
 }

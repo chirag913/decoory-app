@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS projects (
   today_plan      TEXT DEFAULT '',
   today_team      TEXT DEFAULT '',
   pin             TEXT,                          -- PIN issued at booking, paired with `code` for client login
+  completed_at    TEXT,                          -- set/cleared automatically when progress_pct crosses 100 (services/progress.js)
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -106,6 +107,9 @@ CREATE TABLE IF NOT EXISTS leads (
   source                TEXT NOT NULL CHECK (source IN ('self-estimation','design-upload','manual')),
   status                TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','contacted','qualified')),
   search_data           TEXT,                     -- JSON blob of everything the user entered
+  follow_up_at          TEXT,                     -- next follow-up call/touchpoint due (admin-set)
+  site_visit_at         TEXT,                     -- scheduled site visit (admin-set)
+  quote_status          TEXT NOT NULL DEFAULT 'none' CHECK (quote_status IN ('none','sent','accepted','declined')),
   created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 

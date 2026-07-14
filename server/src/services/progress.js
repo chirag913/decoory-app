@@ -10,5 +10,13 @@ export function recomputeProgress(projectId) {
   ).get(projectId);
   if (row.total === 0) return;
   const pct = Math.round((row.doneCount / row.total) * 100);
-  db.prepare("UPDATE projects SET progress_pct = ? WHERE id = ?").run(pct, projectId);
+  db.prepare(`
+    UPDATE projects SET
+      progress_pct = @pct,
+      completed_at = CASE
+        WHEN @pct = 100 THEN COALESCE(completed_at, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        ELSE NULL
+      END
+    WHERE id = @projectId
+  `).run({ pct, projectId });
 }

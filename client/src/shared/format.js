@@ -35,6 +35,14 @@ export function initials(name) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 }
 
+// Today's IST calendar date as YYYY-MM-DD, independent of the viewing
+// device's own timezone — the app's data (seed dates, due-today logic) is
+// always IST (see server README "Asia/Kolkata"). Plain `toISOString().slice`
+// uses UTC, which reads as "yesterday" for anyone viewing before 5:30 AM IST.
+export function istToday() {
+  return new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+}
+
 export function greeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
