@@ -42,9 +42,11 @@ export default function AdminShell() {
             <span style={{ width: 18, textAlign: "center" }}>{icon}</span><span className="lbl">{label}</span>
           </NavLink>
         ))}
-        <div className="lbl" style={{ marginTop: "auto", padding: "14px 12px", fontSize: 11, color: "#8E8A7C", lineHeight: 1.6, borderTop: "1px solid #333B35" }}>
-          {user.name}<br />
-          <span onClick={() => { logout(); navigate("/login"); }} style={{ cursor: "pointer", color: "#C9C5B6", textDecoration: "underline" }}>Sign out</span>
+        <div style={{ marginTop: "auto", paddingTop: 10, borderTop: "1px solid #333B35" }}>
+          <div className="lbl" style={{ fontSize: 11, color: "#8E8A7C", padding: "4px 12px 8px" }}>{user.name}</div>
+          <button className="dk-nav" onClick={() => { logout(); navigate("/login"); }} title="Sign out" style={{ color: "#C9C5B6" }}>
+            <span style={{ width: 18, textAlign: "center" }}>⏻</span><span className="lbl">Sign out</span>
+          </button>
         </div>
       </aside>
       <main className="dk-main">

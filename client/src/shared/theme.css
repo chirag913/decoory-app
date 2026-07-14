@@ -32,7 +32,12 @@ button { font-family: inherit; }
 .dk-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.12); }
 .dk-input, .dk-textarea, .dk-select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; font-family: inherit; font-size: 13px; box-sizing: border-box; background: #fff; color: var(--ink); }
 .dk-textarea { min-height: 60px; resize: vertical; }
-@media (max-width: 760px) { .dk-side { width: 60px; } .dk-side .lbl { display: none; } .dk-main { padding: 16px; } }
+@media (max-width: 760px) {
+  .dk-side { width: 64px; }
+  .dk-side .lbl { display: none; }
+  .dk-side .dk-nav { justify-content: center; padding: 12px 8px; }
+  .dk-main { padding: 16px; }
+}
 
 /* ── Client app (ca-*) ── */
 .ca-shell { min-height: 100vh; min-height: 100dvh; background: var(--paper); display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; }
