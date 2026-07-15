@@ -81,7 +81,7 @@ function BulkAddForm({ onDone, onClose }) {
 }
 
 function AddLeadForm({ onAdded, onClose }) {
-  const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "", source: "manual" });
+  const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "", source: "manual", date: "" });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -91,6 +91,7 @@ function AddLeadForm({ onAdded, onClose }) {
       await api.post("/leads", {
         name: form.name, city: form.city || null, phone: form.phone || null, scope: form.scope || null,
         statedBudgetPaise: form.budget ? Math.round(Number(form.budget) * 100) : null, source: form.source,
+        createdAt: form.date ? new Date(`${form.date}T12:00:00.000Z`).toISOString() : undefined,
       });
       onAdded();
       onClose();
@@ -111,6 +112,10 @@ function AddLeadForm({ onAdded, onClose }) {
         <select className="dk-select" style={{ width: 140 }} value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
           {SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
         </select>
+        <label style={{ fontSize: 11.5, color: "var(--mut)" }}>
+          Lead date (optional — today if blank)
+          <input className="dk-input" style={{ width: 160, marginTop: 2 }} type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        </label>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button className="dk-btn" disabled={saving || !form.name} onClick={save}>{saving ? "Saving…" : "Add lead"}</button>
