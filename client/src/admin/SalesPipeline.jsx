@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { formatINR, formatDate, timeAgo } from "../shared/format.js";
 import { Chip, Spinner } from "../shared/ui.jsx";
 import { LEAD_STAGES } from "../shared/leadStages.js";
-import LeadDrawer from "./LeadDrawer.jsx";
 
 const SOURCES = ["manual", "facebook", "google", "referral", "website"];
 const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website" };
@@ -83,29 +83,15 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onClick }) {
 }
 
 export default function SalesPipeline() {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState(null);
   const [adding, setAdding] = useState(false);
-  const [openLead, setOpenLead] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverStage, setDragOverStage] = useState(null);
   const [boardError, setBoardError] = useState("");
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
-
-  const updateField = async (id, field, value) => {
-    const res = await api.patch(`/leads/${id}`, { [field]: value });
-    setLeads((ls) => ls.map((l) => (l.id === id ? res.lead : l)));
-    setOpenLead(res.lead);
-    return res;
-  };
-
-  const removeLead = async (lead) => {
-    if (!window.confirm(`Delete the lead for ${lead.name}? This cannot be undone.`)) return;
-    await api.del(`/leads/${lead.id}`);
-    setLeads((ls) => ls.filter((l) => l.id !== lead.id));
-    setOpenLead(null);
-  };
 
   const drop = async (stage) => {
     setDragOverStage(null);
@@ -167,15 +153,13 @@ export default function SalesPipeline() {
                   key={lead.id} lead={lead} dragging={draggingId === lead.id}
                   onDragStart={(e) => { e.dataTransfer.setData("text/plain", lead.id); e.dataTransfer.effectAllowed = "move"; setDraggingId(lead.id); }}
                   onDragEnd={() => setDraggingId(null)}
-                  onClick={() => setOpenLead(lead)}
+                  onClick={() => navigate(`/admin/leads/${lead.id}`)}
                 />
               ))}
             </div>
           );
         })}
       </div>
-
-      {openLead && <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onFieldChange={updateField} onDelete={removeLead} />}
     </div>
   );
 }

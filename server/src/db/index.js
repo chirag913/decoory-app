@@ -36,7 +36,7 @@ db.transaction = (fn) => (...args) => {
 // right after anyway (same `npm run seed` step as before; this just makes
 // the rebuild itself automatic instead of needing the temporary
 // "add npm run seed to the Start Command" dance on every schema change).
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function currentSchemaVersion() {
   const exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'").get();

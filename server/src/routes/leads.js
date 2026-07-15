@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { v4 as uuid } from "uuid";
 import db from "../db/index.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import * as S from "../services/serialize.js";
@@ -27,6 +28,37 @@ function getLeadOr404(req, res) {
   if (!lead) { res.status(404).json({ error: "Lead not found" }); return null; }
   return lead;
 }
+
+router.get("/:id", requireAuth, requireRole("admin"), (req, res) => {
+  const lead = getLeadOr404(req, res);
+  if (!lead) return;
+  res.json({ lead: S.lead(lead) });
+});
+
+// ── Files (lead detail page's "Files" panel — reuses POST /api/uploads) ──
+router.get("/:id/files", requireAuth, requireRole("admin"), (req, res) => {
+  const lead = getLeadOr404(req, res);
+  if (!lead) return;
+  const rows = db.prepare("SELECT * FROM lead_files WHERE lead_id = ? ORDER BY created_at DESC").all(lead.id);
+  res.json({ files: rows.map(S.leadFile) });
+});
+
+router.post("/:id/files", requireAuth, requireRole("admin"), (req, res) => {
+  const lead = getLeadOr404(req, res);
+  if (!lead) return;
+  const { filePath, fileName, kind } = req.body;
+  if (!filePath) return res.status(400).json({ error: "filePath is required — upload via POST /api/uploads first" });
+  const id = uuid();
+  db.prepare("INSERT INTO lead_files (id, lead_id, file_path, file_name, kind, uploaded_by) VALUES (?,?,?,?,?,?)")
+    .run(id, lead.id, filePath, fileName || null, kind === "video" ? "video" : "photo", req.user.name);
+  res.status(201).json({ file: S.leadFile(db.prepare("SELECT * FROM lead_files WHERE id = ?").get(id)) });
+});
+
+router.delete("/:id/files/:fileId", requireAuth, requireRole("admin"), (req, res) => {
+  const result = db.prepare("DELETE FROM lead_files WHERE id = ? AND lead_id = ?").run(req.params.fileId, req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: "File not found" });
+  res.status(204).end();
+});
 
 router.get("/:id/activities", requireAuth, requireRole("admin"), (req, res) => {
   const lead = getLeadOr404(req, res);
@@ -71,7 +103,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   if (!row) return res.status(404).json({ error: "Lead not found" });
   const {
     status, name, phone, whatsapp, email, address, city, scope, statedBudgetPaise,
-    priority, interestLevel, leadOwner, notes, tags, expectedRevenuePaise, followUpAt, siteVisitAt,
+    priority, interestLevel, leadOwner, requirements, notes, tags, expectedRevenuePaise, followUpAt, siteVisitAt,
   } = req.body;
 
   // Validate + create the project BEFORE touching the lead row, so a failed
@@ -112,6 +144,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
       priority = COALESCE(@priority, priority),
       interest_level = COALESCE(@interestLevel, interest_level),
       lead_owner = CASE WHEN @leadOwner IS NULL THEN lead_owner ELSE NULLIF(@leadOwner, '') END,
+      requirements = CASE WHEN @requirements IS NULL THEN requirements ELSE NULLIF(@requirements, '') END,
       notes = CASE WHEN @notes IS NULL THEN notes ELSE NULLIF(@notes, '') END,
       tags = COALESCE(@tags, tags),
       expected_revenue_paise = COALESCE(@expectedRevenuePaise, expected_revenue_paise),
@@ -121,7 +154,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
     WHERE id = @id
   `).run(normalizeParams({
     id: row.id, status, name, city, phone, whatsapp, email, address, scope, statedBudgetPaise,
-    priority, interestLevel, leadOwner, notes,
+    priority, interestLevel, leadOwner, requirements, notes,
     tags: tags !== undefined ? JSON.stringify(tags) : null,
     expectedRevenuePaise, followUpAt, siteVisitAt,
     convertedProjectId: createdProject?.project.id,
@@ -144,6 +177,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
 router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {
   db.prepare("UPDATE projects SET source_lead_id = NULL WHERE source_lead_id = ?").run(req.params.id);
   db.prepare("DELETE FROM lead_activities WHERE lead_id = ?").run(req.params.id);
+  db.prepare("DELETE FROM lead_files WHERE lead_id = ?").run(req.params.id);
   const result = db.prepare("DELETE FROM leads WHERE id = ?").run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: "Lead not found" });
   res.status(204).end();

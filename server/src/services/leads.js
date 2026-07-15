@@ -44,12 +44,12 @@ export function createLead(fields, createdBy) {
     INSERT INTO leads (
       id, lead_code, name, phone, whatsapp, email, address, city, scope,
       stated_budget_paise, ai_estimate_low_paise, ai_estimate_high_paise, expected_revenue_paise,
-      source, status, priority, interest_level, lead_owner, notes, tags, search_data,
+      source, status, priority, interest_level, lead_owner, requirements, notes, tags, search_data,
       follow_up_at, site_visit_at, created_at
     ) VALUES (
       @id, @leadCode, @name, @phone, @whatsapp, @email, @address, @city, @scope,
       @statedBudgetPaise, @aiEstimateLowPaise, @aiEstimateHighPaise, @expectedRevenuePaise,
-      @source, @status, @priority, @interestLevel, @leadOwner, @notes, @tags, @searchData,
+      @source, @status, @priority, @interestLevel, @leadOwner, @requirements, @notes, @tags, @searchData,
       @followUpAt, @siteVisitAt, @createdAt
     )
   `).run({
@@ -60,7 +60,7 @@ export function createLead(fields, createdBy) {
     aiEstimateHighPaise: fields.aiEstimateHighPaise || null, expectedRevenuePaise: fields.expectedRevenuePaise || null,
     source: fields.source || "manual", status: fields.status || "new-lead",
     priority: fields.priority || "medium", interestLevel: fields.interestLevel || "warm",
-    leadOwner: fields.leadOwner || null, notes: fields.notes || null,
+    leadOwner: fields.leadOwner || null, requirements: fields.requirements || null, notes: fields.notes || null,
     tags: fields.tags ? JSON.stringify(fields.tags) : null,
     searchData: fields.searchData ? JSON.stringify(fields.searchData) : null,
     followUpAt: fields.followUpAt || null, siteVisitAt: fields.siteVisitAt || null,

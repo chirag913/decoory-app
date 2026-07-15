@@ -20,3 +20,12 @@ export function whatsappUpdateLink({ clientName, clientPhone, projectName, proje
   const text = `Hi ${clientName}, here's today's update on ${projectName} (${projectCode}):\n\n${bullet}\n\nYou can view photos and full details in the Decoory app.`;
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
+
+// Sales Pipeline "Open WhatsApp" quick action — opens a chat with the
+// lead's own number (WhatsApp field if set, else phone). Same manual
+// wa.me pattern as above.
+export function whatsappLeadLink({ leadName, phone }) {
+  const digits = (phone || "").replace(/[^\d]/g, "");
+  const text = `Hi ${leadName}, this is Decoory Interior's. `;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}

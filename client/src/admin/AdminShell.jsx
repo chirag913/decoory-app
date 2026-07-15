@@ -5,6 +5,7 @@ import Projects from "./Projects.jsx";
 import ProjectDetail from "./ProjectDetail.jsx";
 import Payments from "./Payments.jsx";
 import Leads from "./Leads.jsx";
+import LeadDetail from "./LeadDetail.jsx";
 import Clients from "./Clients.jsx";
 import Workforce from "./Workforce.jsx";
 import AdminChat from "./AdminChat.jsx";
@@ -56,6 +57,7 @@ export default function AdminShell() {
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="payments" element={<Payments />} />
           <Route path="leads" element={<Leads />} />
+          <Route path="leads/:id" element={<LeadDetail />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:projectId/chat" element={<AdminChat />} />
           <Route path="team" element={<Workforce />} />

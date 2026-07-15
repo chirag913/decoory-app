@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS leads (
   priority               TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low','medium','high')),
   interest_level         TEXT NOT NULL DEFAULT 'warm' CHECK (interest_level IN ('hot','warm','cold')),
   lead_owner              TEXT,
+  requirements            TEXT,                      -- what the customer specifically wants (distinct from `notes`)
   notes                  TEXT,
   tags                    TEXT,                      -- JSON array of strings
   search_data            TEXT,                       -- JSON blob of everything the user entered
@@ -191,6 +192,20 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- Attachments on a lead's detail page (site photos, reference images, a
+-- screenshot of a WhatsApped quotation) — reuses the same /api/uploads
+-- pipeline as project daily-updates and chat, so it's image/video only.
+CREATE TABLE IF NOT EXISTS lead_files (
+  id          TEXT PRIMARY KEY,
+  lead_id     TEXT NOT NULL REFERENCES leads(id),
+  file_path   TEXT NOT NULL,
+  file_name   TEXT,
+  kind        TEXT NOT NULL DEFAULT 'photo' CHECK (kind IN ('photo','video')),
+  uploaded_by TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_lead_files_lead ON lead_files(lead_id);
 CREATE INDEX IF NOT EXISTS idx_lead_activities_lead ON lead_activities(lead_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_project ON milestones(project_id);
 CREATE INDEX IF NOT EXISTS idx_daily_updates_project ON daily_updates(project_id);

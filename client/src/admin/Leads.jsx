@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { formatINR, formatDate } from "../shared/format.js";
 import { Avatar, Chip, Spinner } from "../shared/ui.jsx";
-import LeadDrawer from "./LeadDrawer.jsx";
 
 const SOURCES = ["manual", "facebook", "google", "referral", "website"];
 const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website" };
@@ -48,26 +48,12 @@ function AddLeadForm({ onAdded, onClose }) {
 }
 
 export default function Leads() {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState(null);
   const [adding, setAdding] = useState(false);
-  const [openLead, setOpenLead] = useState(null);
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
-
-  const updateField = async (id, field, value) => {
-    const res = await api.patch(`/leads/${id}`, { [field]: value });
-    setLeads((ls) => ls.map((l) => (l.id === id ? res.lead : l)));
-    setOpenLead(res.lead);
-    return res;
-  };
-
-  const removeLead = async (lead) => {
-    if (!window.confirm(`Delete the lead for ${lead.name}? This cannot be undone.`)) return;
-    await api.del(`/leads/${lead.id}`);
-    setLeads((ls) => ls.filter((l) => l.id !== lead.id));
-    setOpenLead(null);
-  };
 
   if (!leads) return <Spinner />;
 
@@ -94,7 +80,7 @@ export default function Leads() {
           </thead>
           <tbody>
             {leads.map((l) => (
-              <tr key={l.id} className="dk-row" style={{ borderBottom: "1px solid var(--line)", cursor: "pointer" }} onClick={() => setOpenLead(l)}>
+              <tr key={l.id} className="dk-row" style={{ borderBottom: "1px solid var(--line)", cursor: "pointer" }} onClick={() => navigate(`/admin/leads/${l.id}`)}>
                 <td style={{ padding: "11px 16px", display: "flex", gap: 10, alignItems: "center" }}>
                   <Avatar name={l.name} />
                   <div>
@@ -115,8 +101,6 @@ export default function Leads() {
           </tbody>
         </table>
       </div>
-
-      {openLead && <LeadDrawer lead={openLead} onClose={() => setOpenLead(null)} onFieldChange={updateField} onDelete={removeLead} />}
     </div>
   );
 }

@@ -97,7 +97,7 @@ function run() {
 
   const CONVERTED_LEADS = {
     "DCR-101": seedLeadWithHistory(
-      { name: "Rakesh Sharma", city: "Noida", phone: "+919876500011", scope: "3BHK · Sector 62, Noida", statedBudgetPaise: rupeesToPaise(1850000), expectedRevenuePaise: rupeesToPaise(1850000), source: "self-estimation", priority: "medium", leadOwner: "Priya", createdAt: ist("2026-04-20", "11:00:00") },
+      { name: "Rakesh Sharma", city: "Noida", phone: "+919876500011", scope: "3BHK · Sector 62, Noida", statedBudgetPaise: rupeesToPaise(1850000), expectedRevenuePaise: rupeesToPaise(1850000), source: "self-estimation", priority: "medium", leadOwner: "Priya", requirements: "Modular kitchen with island counter, wardrobes in both bedrooms, false ceiling in living room. Wants handover before their daughter's wedding in September.", createdAt: ist("2026-04-20", "11:00:00") },
       [
         { type: "called", note: "Discussed 3BHK modular kitchen + wardrobe scope", at: ist("2026-04-21", "10:30:00") },
         { type: "visit_completed", note: "Site visit done, measurements taken", at: ist("2026-04-24", "12:00:00") },
@@ -348,7 +348,7 @@ function run() {
     "visit-scheduled",
   );
   seedLeadWithHistory(
-    { name: "Deepika Rao", city: "Noida", email: "deepika.rao@example.com", scope: "3BHK", statedBudgetPaise: rupeesToPaise(1900000), source: "self-estimation", priority: "high", interestLevel: "hot", leadOwner: "Rahul", followUpAt: ist(istToday()), siteVisitAt: ist(istToday(-1)), createdAt: ist(istToday(-5), "10:00:00") },
+    { name: "Deepika Rao", city: "Noida", email: "deepika.rao@example.com", scope: "3BHK", statedBudgetPaise: rupeesToPaise(1900000), source: "self-estimation", priority: "high", interestLevel: "hot", leadOwner: "Rahul", requirements: "Full home interior — false ceiling throughout, modular kitchen with chimney, TV unit in living room.", followUpAt: ist(istToday()), siteVisitAt: ist(istToday(-1)), createdAt: ist(istToday(-5), "10:00:00") },
     [{ type: "visit_completed", note: "Site visit done — needs a quote for full 3BHK + false ceiling", at: ist(istToday(-1), "18:00:00") }],
     "visit-completed",
   );

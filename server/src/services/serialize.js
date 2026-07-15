@@ -110,6 +110,7 @@ export function lead(row) {
     priority: row.priority,
     interestLevel: row.interest_level,
     leadOwner: row.lead_owner,
+    requirements: row.requirements,
     notes: row.notes,
     tags: row.tags ? JSON.parse(row.tags) : [],
     searchData: row.search_data ? JSON.parse(row.search_data) : null,
@@ -117,6 +118,18 @@ export function lead(row) {
     siteVisitAt: row.site_visit_at,
     lastContactDate: row.last_contact_date,
     convertedProjectId: row.converted_project_id,
+    createdAt: row.created_at,
+  };
+}
+
+export function leadFile(row) {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    filePath: row.file_path,
+    fileName: row.file_name,
+    kind: row.kind,
+    uploadedBy: row.uploaded_by,
     createdAt: row.created_at,
   };
 }
