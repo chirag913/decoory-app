@@ -383,6 +383,7 @@ router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {
   db.prepare("UPDATE projects SET source_lead_id = NULL WHERE source_lead_id = ?").run(req.params.id);
   db.prepare("DELETE FROM lead_activities WHERE lead_id = ?").run(req.params.id);
   db.prepare("DELETE FROM lead_files WHERE lead_id = ?").run(req.params.id);
+  db.prepare("DELETE FROM calendar_events WHERE lead_id = ?").run(req.params.id);
   const result = db.prepare("DELETE FROM leads WHERE id = ?").run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: "Lead not found" });
   res.status(204).end();
