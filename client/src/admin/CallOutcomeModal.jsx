@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../api/client.js";
 import { CALL_OUTCOMES, LOST_REASONS, TERMINAL_OUTCOME_KEYS } from "../shared/pipelineHelpers.js";
 
 // The Call Outcome system (Rules 1-3, 8, and the terminal outcomes) — the
@@ -11,6 +12,9 @@ export default function CallOutcomeModal({ lead, onClose, onSubmit }) {
   const [outcome, setOutcome] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [teamMembers, setTeamMembers] = useState([]);
+
+  useEffect(() => { api.get("/team-members").then(({ team }) => setTeamMembers(team)).catch(() => {}); }, []);
 
   // Rule 2 / Rule 3
   const [when, setWhen] = useState("today");
@@ -23,6 +27,7 @@ export default function CallOutcomeModal({ lead, onClose, onSubmit }) {
   const [visitDate, setVisitDate] = useState("");
   const [visitTime, setVisitTime] = useState("");
   const [address, setAddress] = useState(lead.address || "");
+  const [assignedStaff, setAssignedStaff] = useState(lead.leadOwner || "");
   const [visitNotes, setVisitNotes] = useState("");
   // Rule 8
   const [lostReason, setLostReason] = useState("");
@@ -109,6 +114,10 @@ export default function CallOutcomeModal({ lead, onClose, onSubmit }) {
             <input className="dk-input" type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
             <input className="dk-input" type="time" value={visitTime} onChange={(e) => setVisitTime(e.target.value)} />
             <input className="dk-input" placeholder="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <select className="dk-select" value={assignedStaff} onChange={(e) => setAssignedStaff(e.target.value)}>
+              <option value="">— Assign staff —</option>
+              {teamMembers.map((m) => <option key={m.id} value={m.name}>{m.name} · {m.role}</option>)}
+            </select>
             <input className="dk-input" placeholder="Notes (optional)" value={visitNotes} onChange={(e) => setVisitNotes(e.target.value)} />
           </div>
         )}
@@ -153,7 +162,7 @@ export default function CallOutcomeModal({ lead, onClose, onSubmit }) {
               onClick={() => {
                 if (outcome === "busy") submit({ outcome: "busy", when, customDate });
                 else if (outcome === "call-back-later") submit({ outcome: "call-back-later", reason: cbReason, date: cbDate, time: cbTime });
-                else if (outcome === "site-visit-booked" || (outcome === "interested" && wantsVisit)) submit({ outcome: "site-visit-booked", visitDate, visitTime, address, notes: visitNotes });
+                else if (outcome === "site-visit-booked" || (outcome === "interested" && wantsVisit)) submit({ outcome: "site-visit-booked", visitDate, visitTime, address, assignedStaff, notes: visitNotes });
                 else if (outcome === "not-interested") submit({ outcome: "not-interested", lostReason, followUp3Months });
                 else if (outcome === "other") submit({ outcome: "other", note });
               }}

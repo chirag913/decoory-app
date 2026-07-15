@@ -197,10 +197,12 @@ function SnoozedLeads({ leads, navigate }) {
   );
 }
 
-function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcome, onWhatsapp, onScheduleVisit, onVisitCompleted, onQuotation, onNegotiation, onRecordAdvance }) {
+function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcome, onWhatsapp, onScheduleVisit, onVisitCompleted, onQuotation, onNegotiation, onRecordAdvance, onSnooze }) {
   const [hovered, setHovered] = useState(false);
   const [popover, setPopover] = useState(null);
   const [visitDate, setVisitDate] = useState("");
+  const [snoozeDate, setSnoozeDate] = useState("");
+  const [snoozeReason, setSnoozeReasonText] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [quoteFollowUp, setQuoteFollowUp] = useState("tomorrow");
   const [vcRequirements, setVcRequirements] = useState(lead.requirements || "");
@@ -265,7 +267,25 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcom
           {actionKeys.includes("quotation") && <button title="Generate Quotation" onClick={(e) => { e.stopPropagation(); setPopover("quote"); }} style={ICON_BTN}>📄</button>}
           {actionKeys.includes("negotiation") && <button title="Log Negotiation" onClick={(e) => { e.stopPropagation(); setPopover("negotiation"); }} style={ICON_BTN}>🤝</button>}
           {actionKeys.includes("advance") && <button title="Record Advance" onClick={(e) => { e.stopPropagation(); setPopover("advance"); }} style={ICON_BTN}>💰</button>}
+          <button title={isSnoozed(lead) ? "Un-snooze" : "Snooze Lead"} onClick={(e) => { e.stopPropagation(); setPopover("snooze"); }} style={ICON_BTN}>😴</button>
           <button title="Open Lead" onClick={(e) => { e.stopPropagation(); onOpen(); }} style={ICON_BTN}>↗</button>
+        </div>
+      )}
+
+      {popover === "snooze" && (
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+          {isSnoozed(lead) ? (
+            <>
+              <div style={{ fontSize: 11, color: "var(--mut)" }}>Snoozed until {lead.snoozedUntil?.slice(0, 10)}{lead.snoozeReason ? ` — ${lead.snoozeReason}` : ""}</div>
+              <button className="dk-btn ghost" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { onSnooze(lead, null, null); close(); }}>Un-snooze</button>
+            </>
+          ) : (
+            <>
+              <input className="dk-input" type="date" style={{ fontSize: 11.5, padding: "5px 7px" }} value={snoozeDate} onChange={(e) => setSnoozeDate(e.target.value)} />
+              <input className="dk-input" placeholder="Reason (optional)" style={{ fontSize: 11.5, padding: "5px 7px" }} value={snoozeReason} onChange={(e) => setSnoozeReasonText(e.target.value)} />
+              <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { if (snoozeDate) { onSnooze(lead, snoozeDate, snoozeReason); close(); setSnoozeDate(""); setSnoozeReasonText(""); } }}>Snooze</button>
+            </>
+          )}
         </div>
       )}
 
@@ -381,6 +401,11 @@ export default function SalesPipeline() {
 
   const submitCallOutcome = async (payload) => {
     await api.post(`/leads/${callOutcomeLead.id}/call-outcome`, payload);
+    load();
+  };
+
+  const toggleSnooze = async (lead, date, reason) => {
+    await api.patch(`/leads/${lead.id}`, { snoozedUntil: date || "", snoozeReason: reason || "" });
     load();
   };
 
@@ -516,6 +541,7 @@ export default function SalesPipeline() {
                   onQuotation={sendQuotation}
                   onNegotiation={logNegotiation}
                   onRecordAdvance={recordAdvance}
+                  onSnooze={toggleSnooze}
                 />
               ))}
             </div>

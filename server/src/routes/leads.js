@@ -142,7 +142,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   const {
     status, name, phone, whatsapp, email, address, city, scope, statedBudgetPaise,
     priority, interestLevel, leadOwner, requirements, notes, tags, expectedRevenuePaise, followUpAt, siteVisitAt, source,
-    lostReason,
+    lostReason, snoozedUntil, snoozeReason,
   } = req.body;
 
   const VALID_SOURCES = ["self-estimation", "design-upload", "manual", "facebook", "google", "referral", "website"];
@@ -209,6 +209,8 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
       follow_up_at = CASE WHEN @followUpAt IS NULL THEN follow_up_at ELSE NULLIF(@followUpAt, '') END,
       site_visit_at = CASE WHEN @siteVisitAt IS NULL THEN site_visit_at ELSE NULLIF(@siteVisitAt, '') END,
       lost_reason = COALESCE(@lostReason, lost_reason),
+      snoozed_until = CASE WHEN @snoozedUntil IS NULL THEN snoozed_until ELSE NULLIF(@snoozedUntil, '') END,
+      snooze_reason = CASE WHEN @snoozeReason IS NULL THEN snooze_reason ELSE NULLIF(@snoozeReason, '') END,
       converted_project_id = COALESCE(@convertedProjectId, converted_project_id)
     WHERE id = @id
   `).run(normalizeParams({
@@ -217,8 +219,15 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
     tags: tags !== undefined ? JSON.stringify(tags) : null,
     expectedRevenuePaise, followUpAt, siteVisitAt,
     lostReason: status === "lost" ? lostReason : undefined,
+    snoozedUntil, snoozeReason,
     convertedProjectId: createdProject?.project.id,
   }));
+
+  // Manual snooze/un-snooze (Rule 10's dedicated action, distinct from the
+  // automatic snooze the Call Outcome "Not Interested" flow can trigger).
+  if (snoozedUntil !== undefined) {
+    logActivity(row.id, "note", snoozedUntil ? `Snoozed until ${snoozedUntil}${snoozeReason ? ` — ${snoozeReason}` : ""}` : "Un-snoozed", req.user.name);
+  }
 
   if (status && status !== row.status) {
     const note = status === "lost" && lostReason

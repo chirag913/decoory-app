@@ -63,6 +63,9 @@ export default function LeadDetail() {
   const [uploading, setUploading] = useState(false);
   const [callOutcomeOpen, setCallOutcomeOpen] = useState(false);
   const [lostPicker, setLostPicker] = useState(false);
+  const [snoozing, setSnoozing] = useState(false);
+  const [snoozeDate, setSnoozeDate] = useState("");
+  const [snoozeReasonText, setSnoozeReasonText] = useState("");
 
   const loadLead = () => api.get(`/leads/${id}`).then(({ lead }) => {
     setLead(lead);
@@ -154,6 +157,14 @@ export default function LeadDetail() {
     setLostPicker(false);
     const res = await api.patch(`/leads/${id}`, { status: "lost", lostReason: reason });
     setLead(res.lead);
+  };
+
+  const toggleSnooze = async (date, reason) => {
+    setSnoozing(false);
+    const res = await api.patch(`/leads/${id}`, { snoozedUntil: date || "", snoozeReason: reason || "" });
+    setLead(res.lead);
+    setSnoozeDate("");
+    setSnoozeReasonText("");
   };
 
   const uploadFile = async (e) => {
@@ -361,6 +372,21 @@ export default function LeadDetail() {
                 {quoteFollowUp === "custom" && <input className="dk-input" type="date" style={{ marginTop: 6 }} onChange={(e) => setQuoteFollowUp(e.target.value)} />}
                 <div style={{ fontSize: 11, color: "var(--mut)", marginTop: 6 }}>Logs that a quotation was sent, updates expected revenue, and moves the lead to Quotation Sent — doesn't generate a PDF.</div>
               </InlineForm>
+            )}
+
+            <button className="dk-btn ghost" onClick={() => setSnoozing((v) => !v)}>{isSnoozed(lead) ? "😴 Un-snooze" : "😴 Snooze Lead"}</button>
+            {snoozing && (
+              isSnoozed(lead) ? (
+                <div className="dk-card" style={{ padding: 10, background: "#FBFAF6" }}>
+                  <div style={{ fontSize: 11, color: "var(--mut)", marginBottom: 6 }}>Snoozed until {formatDate(lead.snoozedUntil)}{lead.snoozeReason ? ` — ${lead.snoozeReason}` : ""}</div>
+                  <button className="dk-btn" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => toggleSnooze(null, null)}>Un-snooze</button>
+                </div>
+              ) : (
+                <InlineForm submitLabel="Snooze" onCancel={() => setSnoozing(false)} onSubmit={() => toggleSnooze(snoozeDate, snoozeReasonText)}>
+                  <input className="dk-input" type="date" value={snoozeDate} onChange={(e) => setSnoozeDate(e.target.value)} style={{ marginBottom: 6 }} />
+                  <input className="dk-input" placeholder="Reason (optional)" value={snoozeReasonText} onChange={(e) => setSnoozeReasonText(e.target.value)} />
+                </InlineForm>
+              )
             )}
 
             <div style={{ borderTop: "1px solid var(--line)", margin: "8px 0" }} />
