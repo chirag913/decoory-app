@@ -11,12 +11,14 @@ import Workforce from "./Workforce.jsx";
 import AdminChat from "./AdminChat.jsx";
 import Documents from "./Documents.jsx";
 import Reports from "./Reports.jsx";
+import Calendar from "./Calendar.jsx";
 
 const NAV = [
   [".", "◧", "Overview"],
   ["projects", "▤", "Projects"],
   ["payments", "₹", "Payments"],
   ["leads", "◎", "Leads"],
+  ["calendar", "▧", "Calendar"],
   ["clients", "☺", "Clients"],
   ["team", "⚒", "Workforce"],
   ["documents", "▦", "Documents"],
@@ -58,6 +60,7 @@ export default function AdminShell() {
           <Route path="payments" element={<Payments />} />
           <Route path="leads" element={<Leads />} />
           <Route path="leads/:id" element={<LeadDetail />} />
+          <Route path="calendar" element={<Calendar />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:projectId/chat" element={<AdminChat />} />
           <Route path="team" element={<Workforce />} />

@@ -211,6 +211,30 @@ CREATE TABLE IF NOT EXISTS lead_files (
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- Company-wide calendar (admin/Calendar.jsx). Site Visits and Follow Ups
+-- are NOT stored here — they're projected at query time from leads'
+-- site_visit_at / follow_up_at (services/calendar.js), so there's one
+-- source of truth for those dates (set via the Lead Detail quick actions).
+-- This table only holds the four event types with no other home:
+-- installations & material deliveries (project-side) and customer
+-- meetings & quotation deadlines (lead or project side).
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id          TEXT PRIMARY KEY,
+  type        TEXT NOT NULL CHECK (type IN (
+                'installation','material_delivery','customer_meeting','quotation_deadline'
+              )),
+  title       TEXT NOT NULL,
+  event_date  TEXT NOT NULL,                       -- ISO date (yyyy-mm-dd)
+  notes       TEXT,
+  lead_id     TEXT REFERENCES leads(id),
+  project_id  TEXT REFERENCES projects(id),
+  created_by  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_lead ON calendar_events(lead_id);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_project ON calendar_events(project_id);
 CREATE INDEX IF NOT EXISTS idx_lead_files_lead ON lead_files(lead_id);
 CREATE INDEX IF NOT EXISTS idx_lead_activities_lead ON lead_activities(lead_id);
 CREATE INDEX IF NOT EXISTS idx_milestones_project ON milestones(project_id);

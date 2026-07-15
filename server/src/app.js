@@ -14,6 +14,7 @@ import suggestionsRoutes from "./routes/suggestions.js";
 import reportsRoutes from "./routes/reports.js";
 import uploadsRoutes from "./routes/uploads.js";
 import estimateRoutes from "./routes/estimate.js";
+import calendarRoutes from "./routes/calendar.js";
 import webhooksRoutes from "./routes/webhooks.js";
 import devRoutes from "./routes/dev.js";
 
@@ -48,6 +49,7 @@ app.use("/api/suggestions", suggestionsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/uploads", uploadsRoutes);
 app.use("/api/estimate", estimateRoutes);
+app.use("/api/calendar", calendarRoutes);
 
 // Time-travel / manual-trigger endpoints for exercising cron rules on
 // demand — never mounted in production (see routes/dev.js).

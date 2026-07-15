@@ -147,6 +147,20 @@ export function leadActivity(row) {
   };
 }
 
+export function calendarEvent(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    eventDate: row.event_date,
+    notes: row.notes,
+    leadId: row.lead_id,
+    projectId: row.project_id,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
+}
+
 export function message(row) {
   return {
     id: row.id,

@@ -13,7 +13,7 @@ const DEV_PASSWORD = "decoory123";
 const TABLES_IN_DELETE_ORDER = [
   "notifications", "messages", "suggestions",
   "update_media", "daily_updates", "milestones", "payments", "materials",
-  "project_team", "team_members", "lead_activities", "leads", "documents",
+  "project_team", "team_members", "calendar_events", "lead_files", "lead_activities", "leads", "documents",
   "projects", "users",
 ];
 
@@ -334,7 +334,7 @@ function run() {
     [{ type: "called", note: "No answer, tried again in the evening", at: ist(istToday(-1), "17:00:00") }],
     "attempting-contact",
   );
-  seedLeadWithHistory(
+  const manishChawlaLead = seedLeadWithHistory(
     { name: "Manish Chawla", city: "Gurugram", whatsapp: "+919812200044", scope: "Full 4BHK", statedBudgetPaise: rupeesToPaise(3500000), source: "design-upload", priority: "high", interestLevel: "hot", leadOwner: "Priya", followUpAt: ist(istToday(1)), tags: ["repeat-referral"], createdAt: ist(istToday(-3), "10:00:00") },
     [{ type: "called", note: "Spoke for 15 min — very interested, wants a site visit next week", at: ist(istToday(-1), "16:00:00") }],
     "connected",
@@ -352,7 +352,7 @@ function run() {
     [{ type: "visit_completed", note: "Site visit done — needs a quote for full 3BHK + false ceiling", at: ist(istToday(-1), "18:00:00") }],
     "visit-completed",
   );
-  seedLeadWithHistory(
+  const amitSethiLead = seedLeadWithHistory(
     { name: "Amit Sethi", city: "Ghaziabad", scope: "Modular kitchen + wardrobes", statedBudgetPaise: rupeesToPaise(700000), source: "manual", priority: "medium", interestLevel: "warm", leadOwner: "Priya", followUpAt: ist(istToday()), createdAt: ist(istToday(-2), "10:00:00") },
     [{ type: "visit_completed", note: "Site visit done, preparing quotation", at: ist(istToday(-2), "15:00:00") }],
     "quotation-pending",
@@ -362,7 +362,7 @@ function run() {
     [{ type: "quotation_sent", note: "Sent quotation — ₹4.2L", at: ist(istToday(-2), "12:00:00") }],
     "quotation-sent",
   );
-  seedLeadWithHistory(
+  const sanaQureshiLead = seedLeadWithHistory(
     { name: "Sana Qureshi", city: "Delhi", scope: "Master bedroom", statedBudgetPaise: rupeesToPaise(320000), aiEstimateLowPaise: rupeesToPaise(280000), aiEstimateHighPaise: rupeesToPaise(350000), expectedRevenuePaise: rupeesToPaise(300000), source: "self-estimation", priority: "low", interestLevel: "warm", leadOwner: "Priya", notes: "Wants to finalize after comparing one more quote from a competitor.", createdAt: ist("2026-07-08", "12:00:00") },
     [
       { type: "quotation_sent", note: "Sent quotation — ₹3.0L", at: ist(istToday(-4), "12:00:00") },
@@ -375,6 +375,21 @@ function run() {
     [{ type: "status_changed", note: "Negotiation → Lost", at: ist(istToday(-5), "12:00:00") }],
     "lost",
   );
+
+  // ── Calendar (admin/Calendar.jsx) — Site Visits/Follow Ups come from the
+  // leads seeded above (site_visit_at/follow_up_at); these are the four
+  // event types with no other home. ──
+  const insertEvent = db.prepare(
+    `INSERT INTO calendar_events (id, type, title, event_date, notes, lead_id, project_id, created_by) VALUES (?,?,?,?,?,?,?,?)`
+  );
+  insertEvent.run(uuid(), "installation", "Modular kitchen installation begins", istToday(3), "Carpentry team + electrician on site", null, pid["DCR-101"], admin.name);
+  insertEvent.run(uuid(), "installation", "Wardrobe installation", istToday(7), null, null, pid["DCR-102"], admin.name);
+  insertEvent.run(uuid(), "material_delivery", "Granite slab delivery", istToday(1), "Confirm site access with client before 2 PM", null, pid["DCR-101"], admin.name);
+  insertEvent.run(uuid(), "material_delivery", "Laminate delivery", istToday(5), null, null, pid["DCR-103"], admin.name);
+  insertEvent.run(uuid(), "customer_meeting", "Design walkthrough with Anita", istToday(2), "Review kitchen layout revisions", null, pid["DCR-102"], admin.name);
+  insertEvent.run(uuid(), "customer_meeting", "In-person meeting — 4BHK requirements", istToday(4), null, manishChawlaLead.id, null, admin.name);
+  insertEvent.run(uuid(), "quotation_deadline", "Send quotation to Amit Sethi", istToday(1), null, amitSethiLead.id, null, admin.name);
+  insertEvent.run(uuid(), "quotation_deadline", "Revised quotation due — Sana Qureshi", istToday(2), "She's comparing against a competitor's quote", sanaQureshiLead.id, null, admin.name);
 
   // ── Suggestions (DCR-101) ──
   const insertSuggestion = db.prepare(`INSERT INTO suggestions (id, project_id, title, description, price_note, status) VALUES (?,?,?,?,?,?)`);
