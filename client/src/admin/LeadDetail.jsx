@@ -6,6 +6,8 @@ import { Chip, Spinner } from "../shared/ui.jsx";
 import { LEAD_STAGES, PRIORITIES, INTEREST_LEVELS } from "../shared/leadStages.js";
 import { whatsappLeadLink } from "../shared/contact.js";
 import ActivityTimeline from "./ActivityTimeline.jsx";
+import CallOutcomeModal from "./CallOutcomeModal.jsx";
+import { LOST_REASONS, isSnoozed, canAdvanceTo } from "../shared/pipelineHelpers.js";
 
 const SOURCES = ["manual", "facebook", "google", "referral", "website", "self-estimation", "design-upload"];
 const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website", "self-estimation": "Self-estimation tool", "design-upload": "Design upload" };
@@ -57,7 +59,10 @@ export default function LeadDetail() {
   const [quoting, setQuoting] = useState(false);
   const [quoteAmount, setQuoteAmount] = useState("");
   const [quoteNote, setQuoteNote] = useState("");
+  const [quoteFollowUp, setQuoteFollowUp] = useState("tomorrow");
   const [uploading, setUploading] = useState(false);
+  const [callOutcomeOpen, setCallOutcomeOpen] = useState(false);
+  const [lostPicker, setLostPicker] = useState(false);
 
   const loadLead = () => api.get(`/leads/${id}`).then(({ lead }) => {
     setLead(lead);
@@ -114,17 +119,41 @@ export default function LeadDetail() {
   const confirmVisit = async () => {
     if (!visitDate) return;
     setScheduling(false);
-    await change("siteVisitAt", visitDate);
+    const res = await api.patch(`/leads/${id}`, {
+      siteVisitAt: visitDate,
+      status: canAdvanceTo(lead, "visit-scheduled") ? "visit-scheduled" : undefined,
+    });
+    setLead(res.lead);
     logQuick("visit_scheduled", `Site visit scheduled for ${formatDate(visitDate)}`);
     setVisitDate("");
   };
 
   const confirmQuote = async () => {
     setQuoting(false);
-    if (quoteAmount) await change("expectedRevenuePaise", Math.round(Number(quoteAmount) * 100));
+    const followUpAt = quoteFollowUp === "tomorrow" ? new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+      : quoteFollowUp === "2days" ? new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10)
+      : quoteFollowUp; // custom date already an ISO date string
+    const res = await api.patch(`/leads/${id}`, {
+      expectedRevenuePaise: quoteAmount ? Math.round(Number(quoteAmount) * 100) : undefined,
+      status: canAdvanceTo(lead, "quotation-sent") ? "quotation-sent" : undefined,
+      followUpAt,
+    });
+    setLead(res.lead);
     logQuick("quotation_sent", quoteNote.trim() || (quoteAmount ? `Sent quotation — ₹${quoteAmount}` : "Quotation sent"));
     setQuoteAmount("");
     setQuoteNote("");
+  };
+
+  const submitCallOutcome = async (payload) => {
+    const res = await api.post(`/leads/${id}/call-outcome`, payload);
+    setLead(res.lead);
+    await loadActivities();
+  };
+
+  const markLost = async (reason) => {
+    setLostPicker(false);
+    const res = await api.patch(`/leads/${id}`, { status: "lost", lostReason: reason });
+    setLead(res.lead);
   };
 
   const uploadFile = async (e) => {
@@ -189,6 +218,14 @@ export default function LeadDetail() {
         <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--ok)" }}>
           ✓ Converted to a project already. <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => navigate(`/admin/projects/${lead.convertedProjectId}`)}>View project →</span>
         </div>
+      )}
+      {isSnoozed(lead) && (
+        <div style={{ marginTop: 10, padding: 10, background: "var(--brass-soft)", color: "var(--brass)", borderRadius: 8, fontSize: 12.5 }}>
+          😴 Snoozed until {formatDate(lead.snoozedUntil)}{lead.snoozeReason ? ` — ${lead.snoozeReason}` : ""}
+        </div>
+      )}
+      {lead.attemptCount > 0 && (
+        <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--mut)" }}>📞 {lead.attemptCount} call attempt{lead.attemptCount === 1 ? "" : "s"} logged</div>
       )}
 
       {/* At-a-glance strip: status/priority/interest/tags — the fields that don't fit any single left-column section but need to stay visible & editable */}
@@ -296,10 +333,7 @@ export default function LeadDetail() {
         {/* RIGHT: Quick Actions */}
         <Section title="Quick actions">
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <a className="dk-btn" style={{ textAlign: "center", textDecoration: "none" }} href={lead.phone ? `tel:${lead.phone}` : undefined}
-              onClick={(e) => { if (!lead.phone) { e.preventDefault(); return; } logQuick("called", "Called via quick action"); }}>
-              📞 Call
-            </a>
+            <button className="dk-btn" onClick={() => setCallOutcomeOpen(true)}>📞 Call</button>
             <a className="dk-btn" style={{ textAlign: "center", textDecoration: "none", background: "#25D366" }}
               href={whatsappLeadLink({ leadName: lead.name, phone: lead.whatsapp || lead.phone })} target="_blank" rel="noreferrer"
               onClick={() => logQuick("whatsapp_sent", "Opened WhatsApp via quick action")}>
@@ -317,18 +351,39 @@ export default function LeadDetail() {
             {quoting && (
               <InlineForm submitLabel="Log" onCancel={() => setQuoting(false)} onSubmit={confirmQuote}>
                 <input className="dk-input" type="number" placeholder="Amount (₹)" value={quoteAmount} onChange={(e) => setQuoteAmount(e.target.value)} style={{ marginBottom: 6 }} />
-                <input className="dk-input" placeholder="Note (optional)" value={quoteNote} onChange={(e) => setQuoteNote(e.target.value)} />
-                <div style={{ fontSize: 11, color: "var(--mut)", marginTop: 6 }}>Logs that a quotation was sent and updates expected revenue — doesn't generate a PDF.</div>
+                <input className="dk-input" placeholder="Note (optional)" value={quoteNote} onChange={(e) => setQuoteNote(e.target.value)} style={{ marginBottom: 6 }} />
+                <div style={{ fontSize: 11, color: "var(--mut)", marginBottom: 4 }}>Follow up:</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {["tomorrow", "2days", "custom"].map((f) => (
+                    <button key={f} className={`dk-btn ${quoteFollowUp === f ? "" : "ghost"}`} style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setQuoteFollowUp(f)}>{f === "tomorrow" ? "Tomorrow" : f === "2days" ? "2 Days" : "Custom"}</button>
+                  ))}
+                </div>
+                {quoteFollowUp === "custom" && <input className="dk-input" type="date" style={{ marginTop: 6 }} onChange={(e) => setQuoteFollowUp(e.target.value)} />}
+                <div style={{ fontSize: 11, color: "var(--mut)", marginTop: 6 }}>Logs that a quotation was sent, updates expected revenue, and moves the lead to Quotation Sent — doesn't generate a PDF.</div>
               </InlineForm>
             )}
 
             <div style={{ borderTop: "1px solid var(--line)", margin: "8px 0" }} />
 
             <button className="dk-btn" style={{ background: "var(--ok)" }} onClick={() => change("status", "won")}>✓ Mark Won</button>
-            <button className="dk-btn ghost" style={{ color: "var(--bad)" }} onClick={() => { if (window.confirm("Mark this lead as lost?")) change("status", "lost"); }}>✕ Mark Lost</button>
+            <button className="dk-btn ghost" style={{ color: "var(--bad)" }} onClick={() => setLostPicker((v) => !v)}>✕ Mark Lost</button>
+            {lostPicker && (
+              <div className="dk-card" style={{ padding: 10, background: "#FBFAF6" }}>
+                <div style={{ fontSize: 11, color: "var(--mut)", marginBottom: 6 }}>Why was this lead lost?</div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {LOST_REASONS.map((r) => (
+                    <button key={r} className="dk-btn ghost" style={{ fontSize: 10.5, padding: "4px 7px" }} onClick={() => markLost(r)}>{r}</button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </Section>
       </div>
+
+      {callOutcomeOpen && (
+        <CallOutcomeModal lead={lead} onClose={() => setCallOutcomeOpen(false)} onSubmit={submitCallOutcome} />
+      )}
 
       {/* Below: Upcoming Follow Ups / Upcoming Visits / Quotation History / Files */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 4 }}>

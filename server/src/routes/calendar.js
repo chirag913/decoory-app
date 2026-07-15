@@ -8,12 +8,19 @@ const router = Router();
 
 const MANUAL_TYPES = ["installation", "material_delivery", "customer_meeting", "quotation_deadline"];
 
-// Aggregates the whole company calendar: Site Visits and Follow Ups are
-// projected from leads' own date fields (single source of truth, set via
-// the Lead Detail quick actions), closed leads excluded since those dates
-// are no longer live commitments. The other four types come straight from
-// calendar_events. Every event is annotated with its linked lead/project's
-// display name so the client can render + link to it without extra fetches.
+// Aggregates the whole company calendar around the Sales Pipeline (Kanban),
+// not free-standing events — the calendar should show what the pipeline is
+// actually doing, day by day. Two parts:
+//  - `events`: Site Visits and Follow Ups, projected from leads' own date
+//    fields (closed leads excluded — those dates are no longer live).
+//  - `activities`: every lead_activities row (with the owning lead's name
+//    attached), so the client can bucket them by day and show daily counts
+//    (new leads, closed/rejected, visits scheduled, quotations sent,
+//    advances received) — see shared/pipelineHelpers.js's dayActivitySummary.
+// calendar_events (installation/material delivery/etc.) is no longer
+// surfaced here — it wasn't tied to the Kanban and cluttered the calendar
+// with things sales staff couldn't act on. The table/routes still exist
+// below if project-side calendar events are wanted again later.
 router.get("/", requireAuth, requireRole("admin"), (req, res) => {
   const events = [];
 
@@ -39,21 +46,18 @@ router.get("/", requireAuth, requireRole("admin"), (req, res) => {
     });
   }
 
-  const manual = db.prepare("SELECT * FROM calendar_events ORDER BY event_date").all();
-  for (const row of manual) {
-    const ev = S.calendarEvent(row);
-    if (ev.leadId) {
-      const lead = db.prepare("SELECT lead_code, name FROM leads WHERE id = ?").get(ev.leadId);
-      if (lead) { ev.leadCode = lead.lead_code; ev.leadName = lead.name; }
-    }
-    if (ev.projectId) {
-      const project = db.prepare("SELECT code, name FROM projects WHERE id = ?").get(ev.projectId);
-      if (project) { ev.projectCode = project.code; ev.projectName = project.name; }
-    }
-    events.push(ev);
-  }
+  const activityRows = db.prepare(`
+    SELECT la.id, la.lead_id, la.type, la.note, la.created_at, l.lead_code, l.name AS lead_name
+    FROM lead_activities la JOIN leads l ON l.id = la.lead_id
+    WHERE la.voided_at IS NULL
+    ORDER BY la.created_at
+  `).all();
+  const activities = activityRows.map((r) => ({
+    id: r.id, type: r.type, note: r.note, createdAt: r.created_at,
+    leadId: r.lead_id, leadCode: r.lead_code, leadName: r.lead_name,
+  }));
 
-  res.json({ events });
+  res.json({ events, activities });
 });
 
 router.post("/", requireAuth, requireRole("admin"), (req, res) => {

@@ -141,7 +141,14 @@ export const FUNNEL_STEPS = [
   { label: "Advance Received", stage: "advance-received" },
 ];
 
-const STAGE_ORDER = Object.fromEntries(LEAD_STAGES.map((s, i) => [s.key, i]));
+export const STAGE_ORDER = Object.fromEntries(LEAD_STAGES.map((s, i) => [s.key, i]));
+
+// Guards quick actions that should auto-advance a lead's stage (e.g.
+// scheduling a visit, sending a quotation) from ever moving it *backward* —
+// a lead already past the target stage stays where it is.
+export function canAdvanceTo(lead, targetStage) {
+  return STAGE_ORDER[lead.status] < STAGE_ORDER[targetStage];
+}
 
 export function computeFunnel(leads) {
   const active = leads.filter((l) => l.status !== "lost");
@@ -178,6 +185,8 @@ export const CALL_OUTCOMES = [
   { key: "other", icon: "✏️", label: "Other" },
 ];
 
+export const TERMINAL_OUTCOME_KEYS = CALL_OUTCOMES.filter((o) => o.terminal).map((o) => o.key);
+
 // Sales Queue — every active (non-terminal, non-snoozed) lead with its next
 // action, most urgent first. Fully derived, so completing the underlying
 // action (which changes the lead's status/followUpAt/siteVisitAt) removes
@@ -194,4 +203,36 @@ export function buildSalesQueue(leads) {
       if (r !== 0) return r;
       return (a.lead.followUpAt || a.lead.siteVisitAt || "9999").localeCompare(b.lead.followUpAt || b.lead.siteVisitAt || "9999");
     });
+}
+
+// Calendar (admin/Calendar.jsx) — the calendar is a day-by-day view of what
+// the Sales Pipeline actually did, not a free-standing events list. Each
+// category is a pure predicate over a lead_activities row (see
+// server/src/routes/calendar.js's `activities` feed); "Rejected/Closed"
+// matches the status_changed note text since both the manual drag-to-Lost
+// flow and the Call Outcome terminal outcomes phrase it slightly differently
+// ("→ Lost" vs "→ Closed — <reason>").
+export const DAY_ACTIVITY_TYPES = [
+  { key: "newLeads", icon: "🆕", label: "New Leads", fg: "#2E6B96", bg: "#E3EDF5", match: (a) => a.type === "lead_created" },
+  { key: "rejected", icon: "🚫", label: "Rejected / Closed", fg: "#B3452E", bg: "#F6E0DA", match: (a) => a.type === "status_changed" && /→\s*(Lost|Closed)/.test(a.note || "") },
+  { key: "visitsScheduled", icon: "📅", label: "Visits Scheduled", fg: "#6B4FA1", bg: "#EAE4F2", match: (a) => a.type === "visit_scheduled" },
+  { key: "quotationsSent", icon: "📄", label: "Quotations Sent", fg: "#A8741A", bg: "#F6ECD8", match: (a) => a.type === "quotation_sent" },
+  { key: "advanceReceived", icon: "💰", label: "Advance Received", fg: "#3E7A5B", bg: "#E4EFE8", match: (a) => a.type === "advance_received" },
+];
+
+// Groups a flat activity feed by day (yyyy-mm-dd) and tallies each category
+// above, keeping the raw matching items too so the calendar's day panel can
+// list them individually (each clickable through to its lead).
+export function summarizeDayActivities(activities) {
+  const byDay = {};
+  for (const a of activities) {
+    const day = (a.createdAt || "").slice(0, 10);
+    if (!day) continue;
+    if (!byDay[day]) byDay[day] = { counts: Object.fromEntries(DAY_ACTIVITY_TYPES.map((t) => [t.key, 0])), items: [] };
+    byDay[day].items.push(a);
+    for (const t of DAY_ACTIVITY_TYPES) {
+      if (t.match(a)) byDay[day].counts[t.key]++;
+    }
+  }
+  return byDay;
 }
