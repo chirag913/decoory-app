@@ -120,11 +120,21 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   const {
     status, name, phone, whatsapp, email, address, city, scope, statedBudgetPaise,
     priority, interestLevel, leadOwner, requirements, notes, tags, expectedRevenuePaise, followUpAt, siteVisitAt, source,
+    lostReason,
   } = req.body;
 
   const VALID_SOURCES = ["self-estimation", "design-upload", "manual", "facebook", "google", "referral", "website"];
   if (source !== undefined && !VALID_SOURCES.includes(source)) {
     return res.status(400).json({ error: `source must be one of: ${VALID_SOURCES.join(", ")}` });
+  }
+
+  // Lost Lead Analytics: the Sales Pipeline's own drag-to-Lost flow always
+  // prompts for a reason (enforced in the UI, not here) — kept optional at
+  // the API level so other callers that set status:'lost' without a reason
+  // (e.g. the Lead Detail page's "Mark Lost" button) keep working unchanged.
+  const VALID_LOST_REASONS = ["Too Expensive", "No Response", "Competitor", "Budget Issue", "Postponed", "Location", "Other"];
+  if (lostReason !== undefined && lostReason !== null && !VALID_LOST_REASONS.includes(lostReason)) {
+    return res.status(400).json({ error: `lostReason must be one of: ${VALID_LOST_REASONS.join(", ")}` });
   }
 
   // Validate + create the project BEFORE touching the lead row, so a failed
@@ -172,6 +182,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
       expected_revenue_paise = COALESCE(@expectedRevenuePaise, expected_revenue_paise),
       follow_up_at = CASE WHEN @followUpAt IS NULL THEN follow_up_at ELSE NULLIF(@followUpAt, '') END,
       site_visit_at = CASE WHEN @siteVisitAt IS NULL THEN site_visit_at ELSE NULLIF(@siteVisitAt, '') END,
+      lost_reason = COALESCE(@lostReason, lost_reason),
       converted_project_id = COALESCE(@convertedProjectId, converted_project_id)
     WHERE id = @id
   `).run(normalizeParams({
@@ -179,11 +190,15 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
     priority, interestLevel, leadOwner, requirements, notes,
     tags: tags !== undefined ? JSON.stringify(tags) : null,
     expectedRevenuePaise, followUpAt, siteVisitAt,
+    lostReason: status === "lost" ? lostReason : undefined,
     convertedProjectId: createdProject?.project.id,
   }));
 
   if (status && status !== row.status) {
-    logActivity(row.id, "status_changed", `${STAGE_LABEL[row.status] || row.status} → ${STAGE_LABEL[status] || status}`, req.user.name);
+    const note = status === "lost" && lostReason
+      ? `${STAGE_LABEL[row.status] || row.status} → ${STAGE_LABEL[status] || status} — ${lostReason}`
+      : `${STAGE_LABEL[row.status] || row.status} → ${STAGE_LABEL[status] || status}`;
+    logActivity(row.id, "status_changed", note, req.user.name);
   }
   if (createdProject) {
     logActivity(row.id, "advance_received", `Project ${createdProject.project.code} created`, req.user.name);

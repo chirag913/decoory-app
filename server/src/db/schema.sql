@@ -134,6 +134,9 @@ CREATE TABLE IF NOT EXISTS leads (
   site_visit_at          TEXT,                        -- scheduled site visit (admin-set)
   last_contact_date      TEXT,                        -- most recent logged activity's timestamp
   converted_project_id   TEXT REFERENCES projects(id), -- set once this lead auto-converts (status = 'advance-received')
+  lost_reason             TEXT CHECK (lost_reason IN (
+                            'Too Expensive','No Response','Competitor','Budget Issue','Postponed','Location','Other'
+                          )),                          -- required by the Sales Pipeline when a lead is moved to 'lost'
   created_at             TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 

@@ -118,6 +118,7 @@ export function lead(row) {
     siteVisitAt: row.site_visit_at,
     lastContactDate: row.last_contact_date,
     convertedProjectId: row.converted_project_id,
+    lostReason: row.lost_reason,
     createdAt: row.created_at,
   };
 }
