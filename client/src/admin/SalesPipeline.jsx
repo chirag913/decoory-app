@@ -139,13 +139,14 @@ function QuickFilters({ activeFilters, toggleFilter }) {
 
 function SalesQueue({ leads, navigate, onCall }) {
   const [open, setOpen] = useState(true);
-  const queue = buildSalesQueue(leads).slice(0, 15);
+  const fullQueue = buildSalesQueue(leads);
+  const queue = fullQueue.slice(0, 15);
   return (
     <div className="dk-card" style={{ padding: 16, marginTop: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setOpen((v) => !v)}>
         <div>
           <div className="dk-eyebrow">Next Tasks</div>
-          <div className="serif" style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>Sales Queue · {queue.length} to do</div>
+          <div className="serif" style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>Sales Queue · {fullQueue.length} to do</div>
         </div>
         <span style={{ fontSize: 12.5, color: "var(--mut)" }}>{open ? "▲ Collapse" : "▼ Expand"}</span>
       </div>
@@ -176,6 +177,9 @@ function SalesQueue({ leads, navigate, onCall }) {
               </div>
             );
           })}
+          {fullQueue.length > queue.length && (
+            <div style={{ fontSize: 11.5, color: "var(--mut)", padding: "8px 6px" }}>+{fullQueue.length - queue.length} more — showing the {queue.length} most urgent.</div>
+          )}
         </div>
       )}
     </div>

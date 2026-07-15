@@ -10,6 +10,7 @@ const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google",
 
 const STAGE_ORDER = Object.fromEntries(LEAD_STAGES.map((s, i) => [s.key, i]));
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+const PAGE_SIZE = 30;
 
 function parseBulkLines(text) {
   return text
@@ -147,6 +148,7 @@ export default function Leads() {
   const [sort, setSort] = useState({ key: null, dir: "asc" });
   const [selected, setSelected] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
@@ -202,6 +204,12 @@ export default function Leads() {
     return rows;
   }, [leads, stageFilter, hideLost, sort]);
 
+  useEffect(() => { setPage(1); }, [stageFilter, hideLost, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginated = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   if (!leads) return <Spinner />;
 
   return (
@@ -231,7 +239,10 @@ export default function Leads() {
             Hide lost leads
           </label>
         )}
-        <span style={{ fontSize: 12, color: "var(--mut)" }}>{visible.length} of {leads.length} lead{leads.length === 1 ? "" : "s"}</span>
+        <span style={{ fontSize: 12, color: "var(--mut)" }}>
+          {visible.length === 0 ? "0" : `${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, visible.length)}`} of {visible.length} lead{visible.length === 1 ? "" : "s"}
+          {visible.length !== leads.length ? ` (${leads.length} total)` : ""}
+        </span>
         {selected.size > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
             <span style={{ fontSize: 12.5, color: "var(--mut)" }}>{selected.size} selected</span>
@@ -250,8 +261,8 @@ export default function Leads() {
               <th style={{ padding: "12px 8px 12px 16px", borderBottom: "1px solid var(--line)", width: 20 }}>
                 <input
                   type="checkbox"
-                  checked={visible.length > 0 && visible.every((l) => selected.has(l.id))}
-                  onChange={(e) => setSelected(e.target.checked ? new Set(visible.map((l) => l.id)) : new Set())}
+                  checked={paginated.length > 0 && paginated.every((l) => selected.has(l.id))}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(paginated.map((l) => l.id)) : new Set())}
                 />
               </th>
               <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>Lead</th>
@@ -267,7 +278,7 @@ export default function Leads() {
             </tr>
           </thead>
           <tbody>
-            {visible.map((l) => (
+            {paginated.map((l) => (
               <tr key={l.id} className="dk-row" style={{ borderBottom: "1px solid var(--line)", cursor: "pointer", background: selected.has(l.id) ? "var(--brass-soft)" : undefined }} onClick={() => navigate(`/admin/leads/${l.id}`)}>
                 <td style={{ padding: "11px 8px 11px 16px" }}>
                   <input type="checkbox" checked={selected.has(l.id)} onChange={(e) => toggleSelect(l.id, e)} onClick={(e) => e.stopPropagation()} />
@@ -293,12 +304,20 @@ export default function Leads() {
                 </td>
               </tr>
             ))}
-            {visible.length === 0 && (
+            {paginated.length === 0 && (
               <tr><td colSpan={11} style={{ padding: 24, textAlign: "center", color: "var(--mut)", fontSize: 13 }}>No leads match this filter.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {pageCount > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14 }}>
+          <button className="dk-btn ghost" style={{ padding: "6px 12px" }} disabled={currentPage === 1} onClick={() => setPage((p) => p - 1)}>← Prev</button>
+          <span style={{ fontSize: 12.5, color: "var(--mut)" }}>Page {currentPage} of {pageCount}</span>
+          <button className="dk-btn ghost" style={{ padding: "6px 12px" }} disabled={currentPage === pageCount} onClick={() => setPage((p) => p + 1)}>Next →</button>
+        </div>
+      )}
     </div>
   );
 }
