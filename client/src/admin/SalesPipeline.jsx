@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -139,8 +139,27 @@ function QuickFilters({ activeFilters, toggleFilter }) {
 
 function SalesQueue({ leads, navigate, onCall }) {
   const [open, setOpen] = useState(true);
+  const [openCategories, setOpenCategories] = useState(new Set());
   const fullQueue = buildSalesQueue(leads);
-  const queue = fullQueue.slice(0, 15);
+
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const item of fullQueue) {
+      const key = item.action.label;
+      if (!map.has(key)) map.set(key, { icon: item.action.icon, label: key, items: [] });
+      map.get(key).items.push(item);
+    }
+    return [...map.values()];
+  }, [fullQueue]);
+
+  const toggleCategory = (label) => {
+    setOpenCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label); else next.add(label);
+      return next;
+    });
+  };
+
   return (
     <div className="dk-card" style={{ padding: 16, marginTop: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setOpen((v) => !v)}>
@@ -152,34 +171,44 @@ function SalesQueue({ leads, navigate, onCall }) {
       </div>
       {open && (
         <div style={{ marginTop: 10 }}>
-          {queue.length === 0 && <div style={{ fontSize: 12.5, color: "var(--mut)" }}>Nothing pending — the queue is clear.</div>}
-          {queue.map(({ lead, action, badge }) => {
-            const isCallAction = action.label === "Call Customer" || action.label === "Follow-up";
+          {groups.length === 0 && <div style={{ fontSize: 12.5, color: "var(--mut)" }}>Nothing pending — the queue is clear.</div>}
+          {groups.map((g) => {
+            const isCategoryOpen = openCategories.has(g.label);
+            const isCallAction = g.label === "Call Customer" || g.label === "Follow-up";
             return (
-              <div
-                key={lead.id} className="dk-row"
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 6px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}
-                onClick={() => navigate(`/admin/leads/${lead.id}`)}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span>{action.icon}</span>
-                  <div>
-                    <b style={{ fontSize: 13 }}>{action.label} — {lead.name}</b>
-                    <div style={{ fontSize: 11, color: "var(--mut)" }}>{lead.leadCode} · {lead.scope || "—"}</div>
+              <div key={g.label} style={{ borderTop: "1px solid var(--line)" }}>
+                <div
+                  onClick={() => toggleCategory(g.label)}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 6px", cursor: "pointer" }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>{g.icon}</span>
+                    <b style={{ fontSize: 13 }}>{g.label}</b>
+                    <span className="dk-chip" style={{ background: "var(--brass-soft)", color: "var(--brass)" }}>{g.items.length}</span>
                   </div>
+                  <span style={{ fontSize: 11.5, color: "var(--mut)" }}>{isCategoryOpen ? "▲" : "▼"}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {badge && <span className="dk-chip" style={{ background: badge.bg, color: badge.fg, fontSize: 10 }}>{badge.icon} {badge.label}</span>}
-                  {isCallAction && (
-                    <button className="dk-btn" style={{ fontSize: 11, padding: "5px 9px" }} onClick={(e) => { e.stopPropagation(); onCall(lead); }}>📞 Call</button>
-                  )}
-                </div>
+                {isCategoryOpen && g.items.map(({ lead, badge }) => (
+                  <div
+                    key={lead.id} className="dk-row"
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 6px 8px 24px", borderTop: "1px solid var(--line)", cursor: "pointer" }}
+                    onClick={() => navigate(`/admin/leads/${lead.id}`)}
+                  >
+                    <div>
+                      <b style={{ fontSize: 13 }}>{lead.name}</b>
+                      <div style={{ fontSize: 11, color: "var(--mut)" }}>{lead.leadCode} · {lead.scope || "—"}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {badge && <span className="dk-chip" style={{ background: badge.bg, color: badge.fg, fontSize: 10 }}>{badge.icon} {badge.label}</span>}
+                      {isCallAction && (
+                        <button className="dk-btn" style={{ fontSize: 11, padding: "5px 9px" }} onClick={(e) => { e.stopPropagation(); onCall(lead); }}>📞 Call</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             );
           })}
-          {fullQueue.length > queue.length && (
-            <div style={{ fontSize: 11.5, color: "var(--mut)", padding: "8px 6px" }}>+{fullQueue.length - queue.length} more — showing the {queue.length} most urgent.</div>
-          )}
         </div>
       )}
     </div>
@@ -363,6 +392,7 @@ export default function SalesPipeline() {
   const [activeFilters, setActiveFilters] = useState(new Set());
   const [lostModal, setLostModal] = useState(null);
   const [callOutcomeLead, setCallOutcomeLead] = useState(null);
+  const [search, setSearch] = useState("");
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
@@ -472,7 +502,13 @@ export default function SalesPipeline() {
 
   if (!leads) return <Spinner />;
 
-  const filteredLeads = leads.filter((l) => !isSnoozed(l) && leadMatchesFilters(l, activeFilters, { userName: user?.name }));
+  const searchQuery = search.trim().toLowerCase();
+  const filteredLeads = leads.filter((l) => {
+    if (isSnoozed(l)) return false;
+    if (!leadMatchesFilters(l, activeFilters, { userName: user?.name })) return false;
+    if (searchQuery && !(l.name.toLowerCase().includes(searchQuery) || (l.phone || "").includes(searchQuery) || (l.whatsapp || "").includes(searchQuery))) return false;
+    return true;
+  });
 
   return (
     <div>
@@ -512,7 +548,12 @@ export default function SalesPipeline() {
         <CallOutcomeModal lead={callOutcomeLead} onClose={() => setCallOutcomeLead(null)} onSubmit={submitCallOutcome} />
       )}
 
-      <div style={{ display: "flex", gap: 12, marginTop: 16, overflowX: "auto", paddingBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
+        <input className="dk-input" style={{ width: 260 }} placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {search && <span style={{ fontSize: 12, color: "var(--mut)" }}>{filteredLeads.length} match{filteredLeads.length === 1 ? "" : "es"}</span>}
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 10, overflowX: "auto", paddingBottom: 12 }}>
         {LEAD_STAGES.map((stage) => {
           const stageLeads = filteredLeads.filter((l) => l.status === stage.key);
           const revenue = stageLeads.reduce((sum, l) => sum + (l.expectedRevenuePaise || 0), 0);

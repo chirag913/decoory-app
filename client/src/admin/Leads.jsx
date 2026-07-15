@@ -149,6 +149,7 @@ export default function Leads() {
   const [selected, setSelected] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
@@ -187,6 +188,8 @@ export default function Leads() {
     let rows = leads;
     if (stageFilter !== "all") rows = rows.filter((l) => l.status === stageFilter);
     else if (hideLost) rows = rows.filter((l) => l.status !== "lost");
+    const q = search.trim().toLowerCase();
+    if (q) rows = rows.filter((l) => l.name.toLowerCase().includes(q) || (l.phone || "").includes(q) || (l.whatsapp || "").includes(q));
     if (sort.key) {
       rows = [...rows].sort((a, b) => {
         let av, bv;
@@ -202,9 +205,9 @@ export default function Leads() {
       if (sort.dir === "desc") rows.reverse();
     }
     return rows;
-  }, [leads, stageFilter, hideLost, sort]);
+  }, [leads, stageFilter, hideLost, sort, search]);
 
-  useEffect(() => { setPage(1); }, [stageFilter, hideLost, sort]);
+  useEffect(() => { setPage(1); }, [stageFilter, hideLost, sort, search]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -229,6 +232,7 @@ export default function Leads() {
       {bulkAdding && <div style={{ marginTop: 16 }}><BulkAddForm onDone={load} onClose={() => setBulkAdding(false)} /></div>}
 
       <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
+        <input className="dk-input" style={{ width: 220 }} placeholder="Search name or phone…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <select className="dk-select" style={{ width: 200 }} value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}>
           <option value="all">All stages</option>
           {LEAD_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
