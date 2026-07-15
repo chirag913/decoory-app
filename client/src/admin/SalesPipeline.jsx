@@ -117,8 +117,9 @@ export default function SalesPipeline() {
 
   return (
     <div>
+      <h1 className="serif" style={{ fontSize: 26, fontWeight: 600, marginBottom: 4 }}>Sales Pipeline</h1>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ fontSize: 13, color: "var(--mut)" }}>Drag a card to move it through the pipeline. Reaching "Advance Received" automatically creates the project.</div>
+        <div style={{ fontSize: 13, color: "var(--mut)" }}>Every lead before an advance payment — drag cards through the stages. Reaching "Advance Received" automatically creates the project.</div>
         <button className="dk-btn" onClick={() => setAdding((v) => !v)}>+ Add lead</button>
       </div>
 

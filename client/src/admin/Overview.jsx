@@ -102,28 +102,28 @@ export default function Overview() {
           count={needFirstCall.length}
           detail={needFirstCall.length ? needFirstCall.slice(0, 3).map((l) => l.name).join(" · ") : "Nothing waiting"}
           priority={needFirstCall.length === 0 ? "ok" : oldestNewLeadHours > 24 ? "bad" : "warn"}
-          onClick={() => navigate("projects")}
+          onClick={() => navigate("sales-pipeline")}
         />
         <ActionRow
           icon="📞" label="Follow ups due"
           count={followUpsDue.length}
           detail={followUpsDue.length ? followUpsDue.slice(0, 3).map((l) => l.name).join(" · ") : "Nothing due"}
           priority={followUpsDue.length === 0 ? "ok" : followUpsOverdue.length > 0 ? "bad" : "warn"}
-          onClick={() => navigate("projects")}
+          onClick={() => navigate("sales-pipeline")}
         />
         <ActionRow
           icon="📅" label="Site visits today"
           count={siteVisitsToday.length}
           detail={siteVisitsToday.length ? siteVisitsToday.slice(0, 3).map((l) => l.name).join(" · ") : "None scheduled"}
           priority={siteVisitsToday.length === 0 ? "ok" : "warn"}
-          onClick={() => navigate("projects")}
+          onClick={() => navigate("sales-pipeline")}
         />
         <ActionRow
           icon="📄" label="Quotations pending"
           count={quotesPending.length}
           detail={quotesPending.length ? quotesPending.slice(0, 3).map((l) => l.name).join(" · ") : "Nothing pending"}
           priority={quotesPending.length === 0 ? "ok" : "warn"}
-          onClick={() => navigate("projects")}
+          onClick={() => navigate("sales-pipeline")}
         />
         <ActionRow
           icon="💰" label="Payments to collect"

@@ -1,10 +1,10 @@
 import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import Overview from "./Overview.jsx";
-import Projects from "./Projects.jsx";
+import SalesPipelinePage from "./SalesPipelinePage.jsx";
+import ProjectsGrid from "./ProjectsGrid.jsx";
 import ProjectDetail from "./ProjectDetail.jsx";
 import Payments from "./Payments.jsx";
-import Leads from "./Leads.jsx";
 import LeadDetail from "./LeadDetail.jsx";
 import Clients from "./Clients.jsx";
 import Workforce from "./Workforce.jsx";
@@ -13,15 +13,20 @@ import Documents from "./Documents.jsx";
 import Reports from "./Reports.jsx";
 import Calendar from "./Calendar.jsx";
 
+// Architecture: Sales Pipeline (leads, pre-advance) and Projects (execution,
+// post-advance) are deliberately separate top-level sections now, not tabs
+// of one page — see SalesPipelinePage.jsx / ProjectsGrid.jsx. Conversion
+// from a lead to a project still happens the same way it always has (Sales
+// Pipeline reaching "Advance Received", services/projects.js) — this split
+// is navigation/architecture only, no conversion behavior changed.
 const NAV = [
-  [".", "◧", "Overview"],
+  [".", "◧", "Dashboard"],
+  ["sales-pipeline", "◎", "Sales Pipeline"],
   ["projects", "▤", "Projects"],
-  ["payments", "₹", "Payments"],
-  ["leads", "◎", "Leads"],
   ["calendar", "▧", "Calendar"],
-  ["clients", "☺", "Clients"],
-  ["team", "⚒", "Workforce"],
-  ["documents", "▦", "Documents"],
+  ["clients", "☺", "Customers"],
+  ["payments", "₹", "Payments"],
+  ["team", "⚒", "Team"],
   ["reports", "▨", "Reports"],
 ];
 
@@ -55,10 +60,10 @@ export default function AdminShell() {
       <main className="dk-main">
         <Routes>
           <Route index element={<Overview />} />
-          <Route path="projects" element={<Projects />} />
+          <Route path="sales-pipeline" element={<SalesPipelinePage />} />
+          <Route path="projects" element={<ProjectsGrid />} />
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="payments" element={<Payments />} />
-          <Route path="leads" element={<Leads />} />
           <Route path="leads/:id" element={<LeadDetail />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="clients" element={<Clients />} />

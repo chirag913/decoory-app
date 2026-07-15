@@ -180,7 +180,7 @@ export default function Leads() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", flexWrap: "wrap", gap: 10 }}>
         <div>
           <h1 className="serif" style={{ fontSize: 26, fontWeight: 600 }}>Leads</h1>
-          <div style={{ fontSize: 13, color: "var(--mut)", marginTop: 2 }}>Table view of the Sales Pipeline — for the Kanban board, see Projects → Sales Pipeline.</div>
+          <div style={{ fontSize: 13, color: "var(--mut)", marginTop: 2 }}>Table view of the Sales Pipeline — for the Kanban board, switch to the Kanban tab above.</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="dk-btn ghost" onClick={() => setBulkAdding((v) => !v)}>Bulk add</button>

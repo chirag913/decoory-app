@@ -105,7 +105,11 @@ export default function ProjectsGrid() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+        <div>
+          <h1 className="serif" style={{ fontSize: 26, fontWeight: 600 }}>Projects</h1>
+          <div style={{ fontSize: 13, color: "var(--mut)", marginTop: 2 }}>Customers who've paid an advance — active, in-progress work.</div>
+        </div>
         <button className="dk-btn" onClick={() => setAdding((v) => !v)}>+ New project</button>
       </div>
 
