@@ -9,6 +9,11 @@ export function nextLeadCode() {
   return `LD-${String(next).padStart(3, "0")}`;
 }
 
+// Call Outcome "No Response" attempt schedule (services/leads.js /
+// routes/leads.js's call-outcome rule engine) — minutes until the next
+// auto-scheduled follow-up, by attempt number (1-indexed).
+export const ATTEMPT_DELAYS_MIN = [30, 24 * 60, 3 * 24 * 60, 7 * 24 * 60, 15 * 24 * 60];
+
 export const STAGE_LABEL = {
   "new-lead": "New Lead", "attempting-contact": "Attempting Contact", connected: "Connected",
   "visit-scheduled": "Visit Scheduled", "visit-completed": "Visit Completed",

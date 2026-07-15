@@ -5,12 +5,34 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import * as S from "../services/serialize.js";
 import { normalizeParams } from "../utils/sql.js";
 import { createProjectForClient, ApiError } from "../services/projects.js";
-import { createLead, logActivity, STAGE_LABEL } from "../services/leads.js";
+import { createLead, logActivity, STAGE_LABEL, ATTEMPT_DELAYS_MIN } from "../services/leads.js";
 import { now } from "../utils/clock.js";
+import { notifyAllAdmins } from "../services/notify.js";
 
 const router = Router();
 
+// Snooze reconciliation (Rule 10): a snoozed lead is hidden from the active
+// Sales Queue/Kanban until its wake-up date. Rather than run a separate cron
+// job, every list fetch lazily reactivates any lead whose snoozed_until has
+// arrived — clears the snooze, logs it, and raises a notification so it's
+// impossible to miss. Cheap since it's already iterating every lead.
+function reconcileSnoozes() {
+  const today = new Date().toISOString().slice(0, 10);
+  const due = db.prepare("SELECT * FROM leads WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?").all(today);
+  for (const lead of due) {
+    db.prepare("UPDATE leads SET snoozed_until = NULL, snooze_reason = NULL WHERE id = ?").run(lead.id);
+    logActivity(lead.id, "note", "Snoozed lead reactivated for follow-up", "System");
+    notifyAllAdmins({
+      title: "Snoozed lead ready for follow-up",
+      body: `${lead.name} (${lead.lead_code}) is back in the queue.`,
+      type: "lead",
+      data: { leadId: lead.id },
+    });
+  }
+}
+
 router.get("/", requireAuth, requireRole("admin"), (req, res) => {
+  reconcileSnoozes();
   const rows = db.prepare("SELECT * FROM leads ORDER BY created_at DESC").all();
   res.json({ leads: rows.map(S.lead) });
 });
@@ -132,7 +154,11 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   // prompts for a reason (enforced in the UI, not here) — kept optional at
   // the API level so other callers that set status:'lost' without a reason
   // (e.g. the Lead Detail page's "Mark Lost" button) keep working unchanged.
-  const VALID_LOST_REASONS = ["Too Expensive", "No Response", "Competitor", "Budget Issue", "Postponed", "Location", "Other"];
+  const VALID_LOST_REASONS = [
+    "Too Expensive", "No Response", "Competitor", "Budget Issue", "Postponed", "Location",
+    "Wrong Number", "Duplicate Lead", "Fake / Spam", "Outside Service Area", "Already Finalized",
+    "No Requirement", "Wrong Timing", "Language Barrier", "Other",
+  ];
   if (lostReason !== undefined && lostReason !== null && !VALID_LOST_REASONS.includes(lostReason)) {
     return res.status(400).json({ error: `lostReason must be one of: ${VALID_LOST_REASONS.join(", ")}` });
   }
@@ -202,6 +228,19 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   }
   if (createdProject) {
     logActivity(row.id, "advance_received", `Project ${createdProject.project.code} created`, req.user.name);
+    // Rule 9 (Advance Received): if the amount/date were captured, record the
+    // advance as an already-paid milestone on the new project immediately —
+    // it shouldn't show up as "due" when the client first logs in.
+    const { advanceAmountPaise, advancePaymentMethod, advancePaidAt } = req.body;
+    if (advanceAmountPaise && advancePaidAt) {
+      db.prepare(
+        "INSERT INTO payments (id, project_id, label, amount_paise, due_at, status, paid_at) VALUES (?,?,?,?,?,?,?)"
+      ).run(
+        uuid(), createdProject.project.id,
+        `Booking advance${advancePaymentMethod ? ` — ${advancePaymentMethod}` : ""}`,
+        advanceAmountPaise, advancePaidAt, "paid", advancePaidAt
+      );
+    }
   }
 
   const updated = db.prepare("SELECT * FROM leads WHERE id = ?").get(row.id);
@@ -209,6 +248,126 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
     lead: S.lead(updated),
     ...(createdProject ? { project: S.projectDetail(createdProject.project), clientPassword: createdProject.clientPassword, pin: createdProject.pin } : {}),
   });
+});
+
+// ── Call Outcome system ──────────────────────────────────────────────
+// The sales team should only ever record *what happened* on a call —
+// everything else (stage, next action, follow-up date, attempt count,
+// temperature) is derived here, server-side, so every entry point into
+// the pipeline applies the same rules consistently. See CALL_OUTCOMES
+// below for the fixed menu; each case implements one rule from the spec.
+const CALL_OUTCOMES = [
+  "no-response", "busy", "call-back-later", "interested", "site-visit-booked",
+  "not-interested", "wrong-number", "duplicate-lead", "fake-spam",
+  "outside-service-area", "already-finalized", "other",
+];
+
+const CLOSE_REASON = {
+  "wrong-number": "Wrong Number", "duplicate-lead": "Duplicate Lead", "fake-spam": "Fake / Spam",
+  "outside-service-area": "Outside Service Area", "already-finalized": "Already Finalized",
+};
+
+function addMinutesIso(min) {
+  return new Date(Date.now() + min * 60000).toISOString();
+}
+
+router.post("/:id/call-outcome", requireAuth, requireRole("admin"), (req, res) => {
+  const lead = getLeadOr404(req, res);
+  if (!lead) return;
+  const { outcome, ...f } = req.body || {};
+  if (!CALL_OUTCOMES.includes(outcome)) {
+    return res.status(400).json({ error: `outcome must be one of: ${CALL_OUTCOMES.join(", ")}` });
+  }
+
+  const patch = {};
+  let activityType = "called";
+  let activityNote = "";
+  const advanceStage = () => { if (lead.status === "new-lead") patch.status = "attempting-contact"; };
+
+  switch (outcome) {
+    case "no-response": {
+      const attempt = (lead.attempt_count || 0) + 1;
+      patch.attempt_count = attempt;
+      advanceStage();
+      const delay = ATTEMPT_DELAYS_MIN[Math.min(attempt, ATTEMPT_DELAYS_MIN.length) - 1];
+      patch.follow_up_at = addMinutesIso(delay);
+      if (attempt > ATTEMPT_DELAYS_MIN.length) patch.interest_level = "cold";
+      activityNote = `Call attempt ${attempt} — No Response`;
+      break;
+    }
+    case "busy": {
+      const { when, customDate } = f;
+      const date = when === "today" ? new Date().toISOString().slice(0, 10)
+        : when === "tomorrow" ? addMinutesIso(24 * 60).slice(0, 10)
+        : customDate;
+      if (!date) return res.status(400).json({ error: "date is required" });
+      patch.follow_up_at = date;
+      advanceStage();
+      activityNote = `Busy — call again ${date}`;
+      break;
+    }
+    case "call-back-later": {
+      const { reason, date, time } = f;
+      if (!date) return res.status(400).json({ error: "date is required" });
+      patch.follow_up_at = time ? `${date}T${time}:00.000Z` : date;
+      advanceStage();
+      activityNote = reason ? `Call back later — ${reason}` : "Call back later";
+      break;
+    }
+    case "interested": {
+      patch.status = "connected";
+      patch.interest_level = lead.interest_level === "cold" ? "warm" : lead.interest_level;
+      activityNote = "Interested";
+      break;
+    }
+    case "site-visit-booked": {
+      const { visitDate, visitTime, assignedStaff, address, notes } = f;
+      if (!visitDate) return res.status(400).json({ error: "visitDate is required" });
+      patch.status = "visit-scheduled";
+      patch.site_visit_at = visitTime ? `${visitDate}T${visitTime}:00.000Z` : visitDate;
+      if (address) patch.address = address;
+      if (assignedStaff) patch.lead_owner = assignedStaff;
+      activityType = "visit_scheduled";
+      activityNote = `Site visit scheduled for ${visitDate}${visitTime ? " " + visitTime : ""}${assignedStaff ? " — " + assignedStaff : ""}${notes ? ` (${notes})` : ""}`;
+      break;
+    }
+    case "not-interested": {
+      const { lostReason, followUp3Months } = f;
+      if (!lostReason) return res.status(400).json({ error: "lostReason is required" });
+      if (followUp3Months) {
+        patch.snoozed_until = addMinutesIso(90 * 24 * 60).slice(0, 10);
+        patch.snooze_reason = `Not interested — ${lostReason}`;
+        activityType = "note";
+        activityNote = `Not interested (${lostReason}) — snoozed 3 months`;
+      } else {
+        patch.status = "lost";
+        patch.lost_reason = lostReason;
+        activityType = "status_changed";
+        activityNote = `${STAGE_LABEL[lead.status] || lead.status} → Closed — ${lostReason}`;
+      }
+      break;
+    }
+    case "wrong-number": case "duplicate-lead": case "fake-spam": case "outside-service-area": case "already-finalized": {
+      patch.status = "lost";
+      patch.lost_reason = CLOSE_REASON[outcome];
+      activityType = "status_changed";
+      activityNote = `${STAGE_LABEL[lead.status] || lead.status} → Closed — ${CLOSE_REASON[outcome]}`;
+      break;
+    }
+    case "other": {
+      activityType = "note";
+      activityNote = f.note?.trim() || "Other call outcome";
+      break;
+    }
+  }
+
+  const keys = Object.keys(patch);
+  if (keys.length) {
+    db.prepare(`UPDATE leads SET ${keys.map((k) => `${k} = @${k}`).join(", ")} WHERE id = @id`).run({ ...patch, id: lead.id });
+  }
+  logActivity(lead.id, activityType, activityNote, req.user.name);
+
+  res.json({ lead: S.lead(db.prepare("SELECT * FROM leads WHERE id = ?").get(lead.id)) });
 });
 
 router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {

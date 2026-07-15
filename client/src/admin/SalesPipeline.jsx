@@ -8,7 +8,7 @@ import { LEAD_STAGES } from "../shared/leadStages.js";
 import { whatsappLeadLink } from "../shared/contact.js";
 import {
   PRIORITY_CARDS, QUICK_FILTERS, leadMatchesFilters, leadAge, nextAction, overdueBadge,
-  computeFunnel, LOST_REASONS, buildSalesQueue,
+  computeFunnel, LOST_REASONS, buildSalesQueue, isSnoozed, CALL_OUTCOMES,
 } from "../shared/pipelineHelpers.js";
 
 const SOURCES = ["manual", "facebook", "google", "referral", "website"];
@@ -16,6 +16,9 @@ const SOURCE_LABEL = {
   manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website",
   "self-estimation": "Self-estimation", "design-upload": "Design upload",
 };
+const PAYMENT_METHODS = ["Cash", "Cheque", "Bank Transfer", "UPI", "Card", "Other"];
+const NEGOTIATION_REASONS = ["Discount Requested", "Needs Time", "Family Decision", "Loan", "Other"];
+const TERMINAL_OUTCOME_KEYS = CALL_OUTCOMES.filter((o) => o.terminal).map((o) => o.key);
 
 const ICON_BTN = { flex: 1, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 6, padding: "5px 0", fontSize: 13, cursor: "pointer" };
 
@@ -129,7 +132,7 @@ function QuickFilters({ activeFilters, toggleFilter }) {
   );
 }
 
-function SalesQueue({ leads, navigate }) {
+function SalesQueue({ leads, navigate, onCall }) {
   const [open, setOpen] = useState(true);
   const queue = buildSalesQueue(leads).slice(0, 15);
   return (
@@ -144,38 +147,251 @@ function SalesQueue({ leads, navigate }) {
       {open && (
         <div style={{ marginTop: 10 }}>
           {queue.length === 0 && <div style={{ fontSize: 12.5, color: "var(--mut)" }}>Nothing pending — the queue is clear.</div>}
-          {queue.map(({ lead, action, badge }) => (
-            <div
-              key={lead.id} className="dk-row"
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 6px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}
-              onClick={() => navigate(`/admin/leads/${lead.id}`)}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span>{action.icon}</span>
-                <div>
-                  <b style={{ fontSize: 13 }}>{action.label} — {lead.name}</b>
-                  <div style={{ fontSize: 11, color: "var(--mut)" }}>{lead.leadCode} · {lead.scope || "—"}</div>
+          {queue.map(({ lead, action, badge }) => {
+            const isCallAction = action.label === "Call Customer" || action.label === "Follow-up";
+            return (
+              <div
+                key={lead.id} className="dk-row"
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 6px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}
+                onClick={() => navigate(`/admin/leads/${lead.id}`)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span>{action.icon}</span>
+                  <div>
+                    <b style={{ fontSize: 13 }}>{action.label} — {lead.name}</b>
+                    <div style={{ fontSize: 11, color: "var(--mut)" }}>{lead.leadCode} · {lead.scope || "—"}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {badge && <span className="dk-chip" style={{ background: badge.bg, color: badge.fg, fontSize: 10 }}>{badge.icon} {badge.label}</span>}
+                  {isCallAction && (
+                    <button className="dk-btn" style={{ fontSize: 11, padding: "5px 9px" }} onClick={(e) => { e.stopPropagation(); onCall(lead); }}>📞 Call</button>
+                  )}
                 </div>
               </div>
-              {badge && <span className="dk-chip" style={{ background: badge.bg, color: badge.fg, fontSize: 10 }}>{badge.icon} {badge.label}</span>}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCall, onWhatsapp, onScheduleVisit, onQuotation, onRecordAdvance }) {
+function SnoozedLeads({ leads, navigate }) {
+  const snoozed = leads.filter(isSnoozed);
+  if (!snoozed.length) return null;
+  return (
+    <div className="dk-card" style={{ padding: 16, marginTop: 14 }}>
+      <div className="dk-eyebrow">😴 Snoozed Leads</div>
+      <div style={{ fontSize: 12, color: "var(--mut)", marginTop: 2, marginBottom: 8 }}>Hidden from the active pipeline — reactivates automatically on its follow-up date.</div>
+      {snoozed.map((lead) => (
+        <div key={lead.id} className="dk-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 6px", borderBottom: "1px solid var(--line)", cursor: "pointer" }} onClick={() => navigate(`/admin/leads/${lead.id}`)}>
+          <div>
+            <b style={{ fontSize: 13 }}>{lead.name}</b>
+            <div style={{ fontSize: 11, color: "var(--mut)" }}>{lead.leadCode} · {lead.snoozeReason || "Snoozed"}</div>
+          </div>
+          <span style={{ fontSize: 11.5, color: "var(--mut)" }}>Wakes {formatDate(lead.snoozedUntil)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// The Call Outcome system (Rules 1-3, 8, and the terminal outcomes) — the
+// only thing a salesperson records after a call is *what happened*; every
+// stage move, follow-up date, attempt count and temperature change is
+// computed server-side (POST /leads/:id/call-outcome) from that single
+// choice, so it's always applied consistently.
+function CallOutcomeModal({ lead, onClose, onSubmit }) {
+  const [outcome, setOutcome] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Rule 2 / Rule 3
+  const [when, setWhen] = useState("today");
+  const [customDate, setCustomDate] = useState("");
+  const [cbReason, setCbReason] = useState("");
+  const [cbDate, setCbDate] = useState("");
+  const [cbTime, setCbTime] = useState("");
+  // Rule 4
+  const [wantsVisit, setWantsVisit] = useState(null);
+  const [visitDate, setVisitDate] = useState("");
+  const [visitTime, setVisitTime] = useState("");
+  const [address, setAddress] = useState(lead.address || "");
+  const [visitNotes, setVisitNotes] = useState("");
+  // Rule 8
+  const [lostReason, setLostReason] = useState("");
+  const [followUp3Months, setFollowUp3Months] = useState(null);
+  // Other
+  const [note, setNote] = useState("");
+
+  const submit = async (payload) => {
+    setError("");
+    setSaving(true);
+    try {
+      await onSubmit(payload);
+      onClose();
+    } catch (err) {
+      setError(err.message || "Could not save this outcome");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pick = (key) => {
+    if (TERMINAL_OUTCOME_KEYS.includes(key) || key === "no-response") {
+      submit({ outcome: key });
+    } else {
+      setOutcome(key);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,16,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }} onClick={onClose}>
+      <div className="dk-card" style={{ padding: 20, width: 420, maxWidth: "92vw", maxHeight: "86vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+          <div>
+            <div className="dk-eyebrow">Call Outcome</div>
+            <div className="serif" style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>{lead.name}</div>
+          </div>
+          <span style={{ cursor: "pointer", color: "var(--mut)" }} onClick={onClose}>✕</span>
+        </div>
+        {lead.phone && <a href={`tel:${lead.phone}`} style={{ fontSize: 12.5, color: "var(--brass)", display: "inline-block", marginTop: 6 }}>📞 Dial {lead.phone}</a>}
+
+        {!outcome && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 14 }}>
+            {CALL_OUTCOMES.map((o) => (
+              <button key={o.key} className="dk-btn ghost" style={{ fontSize: 12.5, padding: "8px 6px", textAlign: "left" }} disabled={saving} onClick={() => pick(o.key)}>
+                {o.icon} {o.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {outcome === "busy" && (
+          <div style={{ marginTop: 14 }}>
+            <div className="dk-eyebrow" style={{ marginBottom: 8 }}>When should we call again?</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {["today", "tomorrow", "custom"].map((w) => (
+                <button key={w} className={`dk-btn ${when === w ? "" : "ghost"}`} style={{ fontSize: 12, padding: "6px 10px", textTransform: "capitalize" }} onClick={() => setWhen(w)}>{w}</button>
+              ))}
+            </div>
+            {when === "custom" && <input className="dk-input" type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} />}
+          </div>
+        )}
+
+        {outcome === "call-back-later" && (
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            <input className="dk-input" placeholder="Reason (optional)" value={cbReason} onChange={(e) => setCbReason(e.target.value)} />
+            <input className="dk-input" type="date" value={cbDate} onChange={(e) => setCbDate(e.target.value)} />
+            <input className="dk-input" type="time" value={cbTime} onChange={(e) => setCbTime(e.target.value)} />
+          </div>
+        )}
+
+        {outcome === "interested" && wantsVisit === null && (
+          <div style={{ marginTop: 14 }}>
+            <div className="dk-eyebrow" style={{ marginBottom: 8 }}>Schedule a site visit?</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="dk-btn" style={{ fontSize: 12.5 }} onClick={() => setWantsVisit(true)}>Yes</button>
+              <button className="dk-btn ghost" style={{ fontSize: 12.5 }} onClick={() => submit({ outcome: "interested" })} disabled={saving}>No, just interested</button>
+            </div>
+          </div>
+        )}
+
+        {(outcome === "site-visit-booked" || (outcome === "interested" && wantsVisit === true)) && (
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="dk-eyebrow">Visit details</div>
+            <input className="dk-input" type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
+            <input className="dk-input" type="time" value={visitTime} onChange={(e) => setVisitTime(e.target.value)} />
+            <input className="dk-input" placeholder="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input className="dk-input" placeholder="Notes (optional)" value={visitNotes} onChange={(e) => setVisitNotes(e.target.value)} />
+          </div>
+        )}
+
+        {outcome === "not-interested" && (
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="dk-eyebrow">Why?</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {LOST_REASONS.map((r) => (
+                <button key={r} className={`dk-btn ${lostReason === r ? "" : "ghost"}`} style={{ fontSize: 11.5, padding: "5px 9px" }} onClick={() => setLostReason(r)}>{r}</button>
+              ))}
+            </div>
+            {lostReason && (
+              <>
+                <div className="dk-eyebrow" style={{ marginTop: 4 }}>Follow up again in 3 months?</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button className={`dk-btn ${followUp3Months === true ? "" : "ghost"}`} style={{ fontSize: 12 }} onClick={() => setFollowUp3Months(true)}>Yes, snooze</button>
+                  <button className={`dk-btn ${followUp3Months === false ? "" : "ghost"}`} style={{ fontSize: 12 }} onClick={() => setFollowUp3Months(false)}>No, close lead</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {outcome === "other" && (
+          <div style={{ marginTop: 14 }}>
+            <textarea className="dk-textarea" placeholder="What happened?" value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+        )}
+
+        {error && <div style={{ fontSize: 12, color: "var(--bad)", marginTop: 10 }}>{error}</div>}
+
+        {outcome && (
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button
+              className="dk-btn" disabled={saving
+                || (outcome === "busy" && when === "custom" && !customDate)
+                || (outcome === "call-back-later" && !cbDate)
+                || ((outcome === "site-visit-booked" || (outcome === "interested" && wantsVisit)) && !visitDate)
+                || (outcome === "not-interested" && (!lostReason || followUp3Months === null))
+              }
+              onClick={() => {
+                if (outcome === "busy") submit({ outcome: "busy", when, customDate });
+                else if (outcome === "call-back-later") submit({ outcome: "call-back-later", reason: cbReason, date: cbDate, time: cbTime });
+                else if (outcome === "site-visit-booked" || (outcome === "interested" && wantsVisit)) submit({ outcome: "site-visit-booked", visitDate, visitTime, address, notes: visitNotes });
+                else if (outcome === "not-interested") submit({ outcome: "not-interested", lostReason, followUp3Months });
+                else if (outcome === "other") submit({ outcome: "other", note });
+              }}
+            >
+              {saving ? "Saving…" : "Confirm"}
+            </button>
+            <button className="dk-btn ghost" onClick={() => { setOutcome(null); setWantsVisit(null); }}>Back</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcome, onWhatsapp, onScheduleVisit, onVisitCompleted, onQuotation, onNegotiation, onRecordAdvance }) {
   const [hovered, setHovered] = useState(false);
   const [popover, setPopover] = useState(null);
   const [visitDate, setVisitDate] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
+  const [quoteFollowUp, setQuoteFollowUp] = useState("tomorrow");
+  const [vcRequirements, setVcRequirements] = useState(lead.requirements || "");
+  const [vcNotes, setVcNotes] = useState("");
+  const [vcFiles, setVcFiles] = useState([]);
+  const [negReason, setNegReason] = useState(NEGOTIATION_REASONS[0]);
+  const [negFollowUp, setNegFollowUp] = useState("");
+  const [advAmount, setAdvAmount] = useState(lead.expectedRevenuePaise ? lead.expectedRevenuePaise / 100 : (lead.statedBudgetPaise ? lead.statedBudgetPaise / 100 : ""));
+  const [advMethod, setAdvMethod] = useState(PAYMENT_METHODS[0]);
+  const [advDate, setAdvDate] = useState(new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = useState(false);
 
   const age = leadAge(lead.createdAt);
   const action = nextAction(lead);
   const badge = overdueBadge(lead);
   const priorityColor = lead.priority === "high" ? "var(--bad)" : lead.priority === "low" ? "var(--line)" : "var(--warn)";
+
+  const actionKeys = lead.status === "visit-scheduled" ? ["visit-completed"]
+    : ["visit-completed", "quotation-pending"].includes(lead.status) ? ["quotation"]
+    : lead.status === "quotation-sent" ? ["negotiation", "advance"]
+    : lead.status === "negotiation" ? ["advance"]
+    : lead.status === "advance-received" ? []
+    : ["visit"];
+
+  const close = () => { setPopover(null); setBusy(false); };
 
   return (
     <div
@@ -208,11 +424,13 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCall, onWh
 
       {hovered && !popover && (
         <div style={{ display: "flex", gap: 4, marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9 }}>
-          <button title="Call" onClick={(e) => { e.stopPropagation(); onCall(lead); }} style={ICON_BTN}>📞</button>
+          <button title="Call" onClick={(e) => { e.stopPropagation(); onCallOutcome(lead); }} style={ICON_BTN}>📞</button>
           <button title="WhatsApp" onClick={(e) => { e.stopPropagation(); onWhatsapp(lead); }} style={ICON_BTN}>💬</button>
-          <button title="Schedule Visit" onClick={(e) => { e.stopPropagation(); setPopover("visit"); }} style={ICON_BTN}>📅</button>
-          <button title="Generate Quotation" onClick={(e) => { e.stopPropagation(); setPopover("quote"); }} style={ICON_BTN}>📄</button>
-          <button title="Record Advance" onClick={(e) => { e.stopPropagation(); onRecordAdvance(lead); }} style={ICON_BTN}>💰</button>
+          {actionKeys.includes("visit") && <button title="Schedule Visit" onClick={(e) => { e.stopPropagation(); setPopover("visit"); }} style={ICON_BTN}>📅</button>}
+          {actionKeys.includes("visit-completed") && <button title="Mark Visit Completed" onClick={(e) => { e.stopPropagation(); setPopover("visit-completed"); }} style={ICON_BTN}>🏠</button>}
+          {actionKeys.includes("quotation") && <button title="Generate Quotation" onClick={(e) => { e.stopPropagation(); setPopover("quote"); }} style={ICON_BTN}>📄</button>}
+          {actionKeys.includes("negotiation") && <button title="Log Negotiation" onClick={(e) => { e.stopPropagation(); setPopover("negotiation"); }} style={ICON_BTN}>🤝</button>}
+          {actionKeys.includes("advance") && <button title="Record Advance" onClick={(e) => { e.stopPropagation(); setPopover("advance"); }} style={ICON_BTN}>💰</button>}
           <button title="Open Lead" onClick={(e) => { e.stopPropagation(); onOpen(); }} style={ICON_BTN}>↗</button>
         </div>
       )}
@@ -220,13 +438,51 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCall, onWh
       {popover === "visit" && (
         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", gap: 4 }}>
           <input className="dk-input" type="date" style={{ fontSize: 11.5, padding: "5px 7px" }} value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
-          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { if (visitDate) { onScheduleVisit(lead, visitDate); setPopover(null); setVisitDate(""); } }}>Set</button>
+          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { if (visitDate) { onScheduleVisit(lead, visitDate); close(); setVisitDate(""); } }}>Set</button>
         </div>
       )}
+
+      {popover === "visit-completed" && (
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+          <input type="file" accept="image/*,video/*" multiple onChange={(e) => setVcFiles([...e.target.files])} style={{ fontSize: 11 }} />
+          <textarea className="dk-textarea" style={{ fontSize: 11.5, minHeight: 44 }} placeholder="Requirements" value={vcRequirements} onChange={(e) => setVcRequirements(e.target.value)} />
+          <input className="dk-input" style={{ fontSize: 11.5, padding: "5px 7px" }} placeholder="Notes" value={vcNotes} onChange={(e) => setVcNotes(e.target.value)} />
+          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} disabled={busy} onClick={async () => { setBusy(true); await onVisitCompleted(lead, { requirements: vcRequirements, notes: vcNotes, files: vcFiles }); close(); }}>{busy ? "Saving…" : "Mark Completed"}</button>
+        </div>
+      )}
+
       {popover === "quote" && (
-        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", gap: 4 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
           <input className="dk-input" type="number" placeholder="₹ amount" style={{ fontSize: 11.5, padding: "5px 7px" }} value={quoteAmount} onChange={(e) => setQuoteAmount(e.target.value)} />
-          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { onQuotation(lead, quoteAmount); setPopover(null); setQuoteAmount(""); }}>Send</button>
+          <div style={{ fontSize: 10.5, color: "var(--mut)" }}>Follow up:</div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {["tomorrow", "2days", "custom"].map((f) => (
+              <button key={f} className={`dk-btn ${quoteFollowUp === f ? "" : "ghost"}`} style={{ fontSize: 10.5, padding: "4px 7px" }} onClick={() => setQuoteFollowUp(f)}>{f === "tomorrow" ? "Tomorrow" : f === "2days" ? "2 Days" : "Custom"}</button>
+            ))}
+          </div>
+          {quoteFollowUp === "custom" && <input className="dk-input" type="date" style={{ fontSize: 11.5, padding: "5px 7px" }} onChange={(e) => setQuoteFollowUp(e.target.value)} />}
+          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { onQuotation(lead, quoteAmount, quoteFollowUp); close(); setQuoteAmount(""); }}>Send</button>
+        </div>
+      )}
+
+      {popover === "negotiation" && (
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+          <select className="dk-select" style={{ fontSize: 11.5, padding: "5px 7px" }} value={negReason} onChange={(e) => setNegReason(e.target.value)}>
+            {NEGOTIATION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <input className="dk-input" type="date" style={{ fontSize: 11.5, padding: "5px 7px" }} value={negFollowUp} onChange={(e) => setNegFollowUp(e.target.value)} />
+          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { if (negFollowUp) { onNegotiation(lead, negReason, negFollowUp); close(); } }}>Log</button>
+        </div>
+      )}
+
+      {popover === "advance" && (
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+          <input className="dk-input" type="number" placeholder="Advance amount (₹)" style={{ fontSize: 11.5, padding: "5px 7px" }} value={advAmount} onChange={(e) => setAdvAmount(e.target.value)} />
+          <select className="dk-select" style={{ fontSize: 11.5, padding: "5px 7px" }} value={advMethod} onChange={(e) => setAdvMethod(e.target.value)}>
+            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <input className="dk-input" type="date" style={{ fontSize: 11.5, padding: "5px 7px" }} value={advDate} onChange={(e) => setAdvDate(e.target.value)} />
+          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} disabled={busy} onClick={async () => { setBusy(true); await onRecordAdvance(lead, advAmount, advMethod, advDate); close(); }}>{busy ? "Saving…" : "Record & Create Project"}</button>
         </div>
       )}
     </div>
@@ -243,6 +499,7 @@ export default function SalesPipeline() {
   const [boardError, setBoardError] = useState("");
   const [activeFilters, setActiveFilters] = useState(new Set());
   const [lostModal, setLostModal] = useState(null);
+  const [callOutcomeLead, setCallOutcomeLead] = useState(null);
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
@@ -288,37 +545,72 @@ export default function SalesPipeline() {
     changeStatus(lead, "lost", { lostReason: reason });
   };
 
-  const logCall = (lead) => {
-    if (lead.phone) window.location.href = `tel:${lead.phone}`;
-    api.post(`/leads/${lead.id}/activities`, { type: "called", note: "Called via Sales Pipeline quick action" }).then(load).catch(() => {});
+  const submitCallOutcome = async (payload) => {
+    await api.post(`/leads/${callOutcomeLead.id}/call-outcome`, payload);
+    load();
   };
+
   const logWhatsapp = (lead) => {
     window.open(whatsappLeadLink({ leadName: lead.name, phone: lead.whatsapp || lead.phone }), "_blank");
     api.post(`/leads/${lead.id}/activities`, { type: "whatsapp_sent", note: "Opened WhatsApp via Sales Pipeline quick action" }).then(load).catch(() => {});
   };
   const scheduleVisit = async (lead, date) => {
-    await api.patch(`/leads/${lead.id}`, { siteVisitAt: date });
+    await api.patch(`/leads/${lead.id}`, { siteVisitAt: date, status: "visit-scheduled" });
     await api.post(`/leads/${lead.id}/activities`, { type: "visit_scheduled", note: `Site visit scheduled for ${formatDate(date)}` });
     load();
   };
-  const sendQuotation = async (lead, amount) => {
-    if (amount) await api.patch(`/leads/${lead.id}`, { expectedRevenuePaise: Math.round(Number(amount) * 100) });
+  const visitCompleted = async (lead, { requirements, notes, files }) => {
+    for (const file of files) {
+      const form = new FormData();
+      form.append("file", file);
+      const { filePath, kind } = await api.post("/uploads", form, { isForm: true });
+      await api.post(`/leads/${lead.id}/files`, { filePath, fileName: file.name, kind });
+    }
+    await api.patch(`/leads/${lead.id}`, { status: "visit-completed", requirements: requirements || undefined, notes: notes || undefined });
+    await api.post(`/leads/${lead.id}/activities`, { type: "visit_completed", note: notes || "Site visit completed" });
+    load();
+  };
+  const sendQuotation = async (lead, amount, followUp) => {
+    const followUpAt = followUp === "tomorrow" ? new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+      : followUp === "2days" ? new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10)
+      : followUp; // custom date already an ISO date string
+    if (amount) await api.patch(`/leads/${lead.id}`, { expectedRevenuePaise: Math.round(Number(amount) * 100), status: "quotation-sent", followUpAt });
+    else await api.patch(`/leads/${lead.id}`, { status: "quotation-sent", followUpAt });
     await api.post(`/leads/${lead.id}/activities`, { type: "quotation_sent", note: amount ? `Sent quotation — ₹${amount}` : "Quotation sent" });
     load();
   };
-  const recordAdvance = (lead) => {
-    if (window.confirm(`Mark ${lead.name} as Advance Received? This creates the project.`)) changeStatus(lead, "advance-received");
+  const logNegotiation = async (lead, reason, followUpAt) => {
+    await api.patch(`/leads/${lead.id}`, { status: "negotiation", followUpAt });
+    await api.post(`/leads/${lead.id}/activities`, { type: "note", note: `Negotiation — ${reason}` });
+    load();
+  };
+  const recordAdvance = async (lead, amount, method, date) => {
+    if (!amount) { setBoardError("Enter an advance amount before recording it."); return; }
+    setBoardError("");
+    const prevLeads = leads;
+    setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, status: "advance-received" } : l)));
+    try {
+      const res = await api.patch(`/leads/${lead.id}`, {
+        status: "advance-received", expectedRevenuePaise: Math.round(Number(amount) * 100),
+        advanceAmountPaise: Math.round(Number(amount) * 100), advancePaymentMethod: method, advancePaidAt: date,
+      });
+      setLeads((ls) => ls.map((l) => (l.id === lead.id ? res.lead : l)));
+      if (res.project) setBoardError(`🎉 ${lead.name} is now project ${res.project.code} — code ${res.project.code}, PIN ${res.pin}. Share these with the client.`);
+    } catch (err) {
+      setLeads(prevLeads);
+      setBoardError(err.message || "Could not record this advance");
+    }
   };
 
   if (!leads) return <Spinner />;
 
-  const filteredLeads = leads.filter((l) => leadMatchesFilters(l, activeFilters, { userName: user?.name }));
+  const filteredLeads = leads.filter((l) => !isSnoozed(l) && leadMatchesFilters(l, activeFilters, { userName: user?.name }));
 
   return (
     <div>
       <h1 className="serif" style={{ fontSize: 26, fontWeight: 600, marginBottom: 4 }}>Sales Pipeline</h1>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ fontSize: 13, color: "var(--mut)" }}>Every lead before an advance payment — drag cards through the stages. Reaching "Advance Received" automatically creates the project.</div>
+        <div style={{ fontSize: 13, color: "var(--mut)" }}>Record what happened on each call — the system moves the lead, schedules the next action, and updates the board automatically. Dragging still works for exceptional cases.</div>
         <button className="dk-btn" onClick={() => setAdding((v) => !v)}>+ Add lead</button>
       </div>
 
@@ -333,7 +625,8 @@ export default function SalesPipeline() {
       <PriorityCards leads={leads} activeFilters={activeFilters} toggleFilter={toggleFilter} />
       <Funnel leads={leads} />
       <QuickFilters activeFilters={activeFilters} toggleFilter={toggleFilter} />
-      <SalesQueue leads={leads} navigate={navigate} />
+      <SalesQueue leads={leads} navigate={navigate} onCall={setCallOutcomeLead} />
+      <SnoozedLeads leads={leads} navigate={navigate} />
 
       {lostModal && (
         <div className="dk-card" style={{ padding: 16, marginTop: 14, background: "#FBFAF6" }}>
@@ -345,6 +638,10 @@ export default function SalesPipeline() {
           </div>
           <button className="dk-btn ghost" style={{ marginTop: 10, color: "var(--bad)" }} onClick={() => setLostModal(null)}>Cancel</button>
         </div>
+      )}
+
+      {callOutcomeLead && (
+        <CallOutcomeModal lead={callOutcomeLead} onClose={() => setCallOutcomeLead(null)} onSubmit={submitCallOutcome} />
       )}
 
       <div style={{ display: "flex", gap: 12, marginTop: 16, overflowX: "auto", paddingBottom: 12 }}>
@@ -378,10 +675,12 @@ export default function SalesPipeline() {
                   onDragStart={(e) => { e.dataTransfer.setData("text/plain", lead.id); e.dataTransfer.effectAllowed = "move"; setDraggingId(lead.id); }}
                   onDragEnd={() => setDraggingId(null)}
                   onOpen={() => navigate(`/admin/leads/${lead.id}`)}
-                  onCall={logCall}
+                  onCallOutcome={setCallOutcomeLead}
                   onWhatsapp={logWhatsapp}
                   onScheduleVisit={scheduleVisit}
+                  onVisitCompleted={visitCompleted}
                   onQuotation={sendQuotation}
+                  onNegotiation={logNegotiation}
                   onRecordAdvance={recordAdvance}
                 />
               ))}

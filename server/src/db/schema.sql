@@ -135,8 +135,13 @@ CREATE TABLE IF NOT EXISTS leads (
   last_contact_date      TEXT,                        -- most recent logged activity's timestamp
   converted_project_id   TEXT REFERENCES projects(id), -- set once this lead auto-converts (status = 'advance-received')
   lost_reason             TEXT CHECK (lost_reason IN (
-                            'Too Expensive','No Response','Competitor','Budget Issue','Postponed','Location','Other'
-                          )),                          -- required by the Sales Pipeline when a lead is moved to 'lost'
+                            'Too Expensive','No Response','Competitor','Budget Issue','Postponed','Location',
+                            'Wrong Number','Duplicate Lead','Fake / Spam','Outside Service Area','Already Finalized',
+                            'No Requirement','Wrong Timing','Language Barrier','Other'
+                          )),                          -- "Close Lead" reason — same field for both close & the old "lost" flow
+  attempt_count          INTEGER NOT NULL DEFAULT 0,    -- call attempts logged via the Call Outcome system (services/leads.js)
+  snoozed_until          TEXT,                          -- set when the lead is snoozed (not lost) until a future date; leads.js clears it automatically once the date arrives
+  snooze_reason          TEXT,
   created_at             TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 

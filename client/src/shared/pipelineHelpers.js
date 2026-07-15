@@ -1,10 +1,8 @@
 // Sales Pipeline usability layer (admin/SalesPipeline.jsx) — Next Action,
-// overdue badges, lead age, the daily funnel, priority cards and quick
-// filter chips are all pure derivations of existing lead fields (status,
-// followUpAt, siteVisitAt, createdAt, interestLevel, source,
-// statedBudgetPaise). Nothing here touches the Kanban stages themselves
-// (see shared/leadStages.js) or persists new state — nothing here writes
-// data; it's read-only.
+// overdue badges, lead age, the daily funnel, priority cards, quick filter
+// chips and the Call Outcome menu are all pure derivations/metadata over
+// existing lead fields. Nothing here touches the Kanban stages themselves
+// (see shared/leadStages.js) or persists state — it's read-only.
 import { LEAD_STAGES } from "./leadStages.js";
 
 export const TERMINAL_STATUSES = ["won", "lost"];
@@ -17,6 +15,18 @@ function d(dateStr) {
   return dateStr ? dateStr.slice(0, 10) : null;
 }
 
+// A snoozed lead is not lost or won — it's just parked until a future date
+// (Rule 10). It should behave like a terminal state everywhere that drives
+// "what needs doing now" (Next Action, badges, Sales Queue, default Kanban
+// view), even though its underlying `status` stays whatever stage it was in.
+export function isSnoozed(lead) {
+  return !!lead.snoozedUntil && d(lead.snoozedUntil) > today();
+}
+
+export function isInactive(lead) {
+  return TERMINAL_STATUSES.includes(lead.status) || isSnoozed(lead);
+}
+
 export function leadAge(createdAt) {
   if (!createdAt) return null;
   const days = Math.max(0, Math.round((Date.parse(today()) - Date.parse(d(createdAt))) / 86400000));
@@ -27,11 +37,12 @@ export function leadAge(createdAt) {
   return { days, label: `${days}d`, icon: "⚫", fg: "#4A473F", bg: "#E9E6DC" };
 }
 
-// Every non-terminal lead should always show exactly one actionable next
-// step — this is the single source of truth for it (Kanban card + Sales
-// Queue panel both call this so they can never disagree).
+// Every non-terminal, non-snoozed lead should always show exactly one
+// actionable next step — this is the single source of truth for it
+// (Kanban card + Sales Queue panel both call this so they can never
+// disagree).
 export function nextAction(lead) {
-  if (TERMINAL_STATUSES.includes(lead.status)) return null;
+  if (isInactive(lead)) return null;
   const followDue = lead.followUpAt && d(lead.followUpAt) <= today();
   const visitDate = d(lead.siteVisitAt);
 
@@ -39,7 +50,7 @@ export function nextAction(lead) {
     case "new-lead":
       return { icon: "📞", label: "Call Customer" };
     case "attempting-contact":
-      return followDue ? { icon: "🔁", label: "Follow-up" } : { icon: "📞", label: "Call Customer" };
+      return followDue ? { icon: "📞", label: "Call Customer" } : { icon: "🔁", label: "Follow-up" };
     case "connected":
       return visitDate ? { icon: "📅", label: visitDate <= today() ? "Visit Today" : "Visit Scheduled" } : { icon: "📅", label: "Schedule Visit" };
     case "visit-scheduled":
@@ -64,7 +75,7 @@ export function nextAction(lead) {
 
 // Only one badge per card — priority order matches urgency/severity.
 export function overdueBadge(lead) {
-  if (TERMINAL_STATUSES.includes(lead.status)) return null;
+  if (isInactive(lead)) return null;
   if (lead.followUpAt && d(lead.followUpAt) < today()) {
     return { icon: "🔴", label: "FOLLOW-UP OVERDUE", bg: "#F6E0DA", fg: "#B3452E" };
   }
@@ -83,16 +94,16 @@ export function overdueBadge(lead) {
 // "Today's Priorities" cards — each is also a quick filter (clicking one
 // toggles the same key used by the Quick Filters row below the funnel).
 export const PRIORITY_CARDS = [
-  { key: "new-first-call", icon: "🔴", label: "New Leads Awaiting First Call", match: (l) => l.status === "new-lead" },
-  { key: "followups-due", icon: "🟠", label: "Follow-ups Due Today", match: (l) => l.followUpAt && d(l.followUpAt) <= today() && !TERMINAL_STATUSES.includes(l.status) },
-  { key: "site-visits-today", icon: "🟣", label: "Site Visits Today", match: (l) => l.siteVisitAt && d(l.siteVisitAt) === today() && !TERMINAL_STATUSES.includes(l.status) },
-  { key: "quotations-due", icon: "🟡", label: "Quotations Due Today", match: (l) => ["visit-completed", "quotation-pending"].includes(l.status) },
-  { key: "advances-expected", icon: "🟢", label: "Advances Expected Today", match: (l) => l.status === "negotiation" },
+  { key: "new-first-call", icon: "🔴", label: "New Leads Awaiting First Call", match: (l) => l.status === "new-lead" && !isSnoozed(l) },
+  { key: "followups-due", icon: "🟠", label: "Follow-ups Due Today", match: (l) => l.followUpAt && d(l.followUpAt) <= today() && !isInactive(l) },
+  { key: "site-visits-today", icon: "🟣", label: "Site Visits Today", match: (l) => l.siteVisitAt && d(l.siteVisitAt) === today() && !isInactive(l) },
+  { key: "quotations-due", icon: "🟡", label: "Quotations Due Today", match: (l) => ["visit-completed", "quotation-pending"].includes(l.status) && !isSnoozed(l) },
+  { key: "advances-expected", icon: "🟢", label: "Advances Expected Today", match: (l) => l.status === "negotiation" && !isSnoozed(l) },
 ];
 
 export const QUICK_FILTERS = [
-  { key: "f-today", label: "Today", match: (l) => (l.followUpAt && d(l.followUpAt) === today()) || (l.siteVisitAt && d(l.siteVisitAt) === today()) },
-  { key: "f-overdue", label: "Overdue", match: (l) => l.followUpAt && d(l.followUpAt) < today() && !TERMINAL_STATUSES.includes(l.status) },
+  { key: "f-today", label: "Today", match: (l) => !isInactive(l) && ((l.followUpAt && d(l.followUpAt) === today()) || (l.siteVisitAt && d(l.siteVisitAt) === today())) },
+  { key: "f-overdue", label: "Overdue", match: (l) => l.followUpAt && d(l.followUpAt) < today() && !isInactive(l) },
   { key: "f-mine", label: "My Leads", match: (l, ctx) => !!ctx?.userName && l.leadOwner === ctx.userName },
   { key: "f-hot", label: "Hot", match: (l) => l.interestLevel === "hot" },
   { key: "f-warm", label: "Warm", match: (l) => l.interestLevel === "warm" },
@@ -140,15 +151,41 @@ export function computeFunnel(leads) {
   }));
 }
 
-export const LOST_REASONS = ["Too Expensive", "No Response", "Competitor", "Budget Issue", "Postponed", "Location", "Other"];
+// Same list the server validates against (server/src/routes/leads.js) —
+// used both for the manual drag-to-Lost flow and the Call Outcome "Not
+// Interested" / terminal outcomes.
+export const LOST_REASONS = [
+  "Too Expensive", "No Response", "Competitor", "Budget Issue", "Postponed", "Location",
+  "Wrong Number", "Duplicate Lead", "Fake / Spam", "Outside Service Area", "Already Finalized",
+  "No Requirement", "Wrong Timing", "Language Barrier", "Other",
+];
 
-// Sales Queue — every non-terminal lead with its next action, most urgent
-// first. Fully derived, so completing the underlying action (which changes
-// the lead's status/followUpAt/siteVisitAt) removes it from this list the
-// next time leads are reloaded — no separate task-tracking state to manage.
+// The fixed Call Outcome menu (Rule set) — keys match the server's
+// POST /leads/:id/call-outcome exactly. `terminal: true` outcomes need no
+// extra fields and close the lead immediately with this label as the reason.
+export const CALL_OUTCOMES = [
+  { key: "no-response", icon: "🔇", label: "No Response" },
+  { key: "busy", icon: "📵", label: "Busy" },
+  { key: "call-back-later", icon: "🕒", label: "Call Back Later" },
+  { key: "interested", icon: "✅", label: "Interested" },
+  { key: "site-visit-booked", icon: "📅", label: "Site Visit Booked" },
+  { key: "not-interested", icon: "🚫", label: "Not Interested" },
+  { key: "wrong-number", icon: "☎️", label: "Wrong Number", terminal: true },
+  { key: "duplicate-lead", icon: "👥", label: "Duplicate Lead", terminal: true },
+  { key: "fake-spam", icon: "⚠️", label: "Fake / Spam", terminal: true },
+  { key: "outside-service-area", icon: "📍", label: "Outside Service Area", terminal: true },
+  { key: "already-finalized", icon: "🏁", label: "Already Finalized", terminal: true },
+  { key: "other", icon: "✏️", label: "Other" },
+];
+
+// Sales Queue — every active (non-terminal, non-snoozed) lead with its next
+// action, most urgent first. Fully derived, so completing the underlying
+// action (which changes the lead's status/followUpAt/siteVisitAt) removes
+// it from this list the next time leads are reloaded — no separate
+// task-tracking state to manage.
 export function buildSalesQueue(leads) {
   return leads
-    .filter((l) => !TERMINAL_STATUSES.includes(l.status))
+    .filter((l) => !isInactive(l))
     .map((l) => ({ lead: l, action: nextAction(l), badge: overdueBadge(l) }))
     .filter((t) => t.action)
     .sort((a, b) => {

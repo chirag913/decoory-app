@@ -119,6 +119,9 @@ export function lead(row) {
     lastContactDate: row.last_contact_date,
     convertedProjectId: row.converted_project_id,
     lostReason: row.lost_reason,
+    attemptCount: row.attempt_count,
+    snoozedUntil: row.snoozed_until,
+    snoozeReason: row.snooze_reason,
     createdAt: row.created_at,
   };
 }
