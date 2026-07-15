@@ -1,11 +1,84 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { formatINR, formatDate } from "../shared/format.js";
 import { Avatar, Chip, Spinner } from "../shared/ui.jsx";
+import { LEAD_STAGES } from "../shared/leadStages.js";
 
-const SOURCES = ["manual", "facebook", "google", "referral", "website"];
-const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website" };
+const SOURCES = ["manual", "facebook", "google", "referral", "website", "self-estimation", "design-upload"];
+const SOURCE_LABEL = { manual: "Manual", facebook: "Facebook", google: "Google", referral: "Referral", website: "Website", "self-estimation": "Self-estimation tool", "design-upload": "Design upload" };
+
+const STAGE_ORDER = Object.fromEntries(LEAD_STAGES.map((s, i) => [s.key, i]));
+const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
+
+function parseBulkLines(text) {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, phone, budget, scope] = line.split(",").map((s) => (s || "").trim());
+      return {
+        name,
+        phone: phone || null,
+        statedBudgetPaise: budget ? Math.round(Number(budget) * 100) : null,
+        scope: scope || null,
+      };
+    })
+    .filter((l) => l.name);
+}
+
+function BulkAddForm({ onDone, onClose }) {
+  const [text, setText] = useState("");
+  const [source, setSource] = useState("manual");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState("");
+
+  const parsed = parseBulkLines(text);
+
+  const importAll = async () => {
+    if (!parsed.length) return;
+    setSaving(true);
+    setResult("");
+    let ok = 0, fail = 0;
+    for (const fields of parsed) {
+      try {
+        await api.post("/leads", { ...fields, source });
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setSaving(false);
+    setResult(`Imported ${ok} lead${ok === 1 ? "" : "s"}${fail ? `, ${fail} failed` : ""}.`);
+    setText("");
+    onDone();
+  };
+
+  return (
+    <div className="dk-card" style={{ padding: 16, marginBottom: 16, background: "#FBFAF6" }}>
+      <div className="dk-eyebrow" style={{ marginBottom: 8 }}>Bulk add leads</div>
+      <div style={{ fontSize: 12, color: "var(--mut)", marginBottom: 8 }}>
+        One lead per line: <code>Name, Phone, Budget, Property type</code> — only Name is required. Example: <code>Ravi Kumar, 9876543210, 1500000, 3BHK</code>
+      </div>
+      <textarea
+        className="dk-textarea" style={{ minHeight: 120, fontFamily: "monospace", fontSize: 12.5 }}
+        placeholder={"Ravi Kumar, 9876543210, 1500000, 3BHK\nMeera Iyer, 9123456780, 900000, 2BHK"}
+        value={text} onChange={(e) => setText(e.target.value)}
+      />
+      <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <select className="dk-select" style={{ width: 160 }} value={source} onChange={(e) => setSource(e.target.value)}>
+          {SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
+        </select>
+        <button className="dk-btn" disabled={saving || !parsed.length} onClick={importAll}>
+          {saving ? "Importing…" : `Import ${parsed.length || ""} lead${parsed.length === 1 ? "" : "s"}`}
+        </button>
+        <button className="dk-btn ghost" onClick={onClose}>Cancel</button>
+        {result && <span style={{ fontSize: 12.5, color: "var(--ok)" }}>{result}</span>}
+      </div>
+    </div>
+  );
+}
 
 function AddLeadForm({ onAdded, onClose }) {
   const [form, setForm] = useState({ name: "", city: "", phone: "", scope: "", budget: "", source: "manual" });
@@ -47,13 +120,58 @@ function AddLeadForm({ onAdded, onClose }) {
   );
 }
 
+function SortHeader({ label, sortKey, sort, setSort }) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700, cursor: "pointer", userSelect: "none" }}
+      onClick={() => setSort((s) => (s.key === sortKey ? { key: sortKey, dir: s.dir === "asc" ? "desc" : "asc" } : { key: sortKey, dir: "asc" }))}
+    >
+      {label}{active ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+    </th>
+  );
+}
+
 export default function Leads() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const [hideLost, setHideLost] = useState(true);
+  const [stageFilter, setStageFilter] = useState("all");
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
+
+  const removeLead = async (l, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete the lead for ${l.name}? This cannot be undone.`)) return;
+    await api.del(`/leads/${l.id}`);
+    load();
+  };
+
+  const visible = useMemo(() => {
+    if (!leads) return [];
+    let rows = leads;
+    if (stageFilter !== "all") rows = rows.filter((l) => l.status === stageFilter);
+    else if (hideLost) rows = rows.filter((l) => l.status !== "lost");
+    if (sort.key) {
+      rows = [...rows].sort((a, b) => {
+        let av, bv;
+        if (sort.key === "stage") { av = STAGE_ORDER[a.status] ?? 99; bv = STAGE_ORDER[b.status] ?? 99; }
+        else if (sort.key === "priority") { av = PRIORITY_ORDER[a.priority] ?? 9; bv = PRIORITY_ORDER[b.priority] ?? 9; }
+        else if (sort.key === "budget") { av = a.statedBudgetPaise || 0; bv = b.statedBudgetPaise || 0; }
+        else if (sort.key === "revenue") { av = a.expectedRevenuePaise || 0; bv = b.expectedRevenuePaise || 0; }
+        else if (sort.key === "when") { av = a.createdAt; bv = b.createdAt; }
+        if (av < bv) return -1;
+        if (av > bv) return 1;
+        return 0;
+      });
+      if (sort.dir === "desc") rows.reverse();
+    }
+    return rows;
+  }, [leads, stageFilter, hideLost, sort]);
 
   if (!leads) return <Spinner />;
 
@@ -64,22 +182,47 @@ export default function Leads() {
           <h1 className="serif" style={{ fontSize: 26, fontWeight: 600 }}>Leads</h1>
           <div style={{ fontSize: 13, color: "var(--mut)", marginTop: 2 }}>Table view of the Sales Pipeline — for the Kanban board, see Projects → Sales Pipeline.</div>
         </div>
-        <button className="dk-btn" onClick={() => setAdding((v) => !v)}>Add lead manually</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="dk-btn ghost" onClick={() => setBulkAdding((v) => !v)}>Bulk add</button>
+          <button className="dk-btn" onClick={() => setAdding((v) => !v)}>Add lead manually</button>
+        </div>
       </div>
 
       {adding && <div style={{ marginTop: 16 }}><AddLeadForm onAdded={load} onClose={() => setAdding(false)} /></div>}
+      {bulkAdding && <div style={{ marginTop: 16 }}><BulkAddForm onDone={load} onClose={() => setBulkAdding(false)} /></div>}
 
-      <div className="dk-card" style={{ marginTop: 16, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 720 }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 16, flexWrap: "wrap" }}>
+        <select className="dk-select" style={{ width: 200 }} value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}>
+          <option value="all">All stages</option>
+          {LEAD_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+        {stageFilter === "all" && (
+          <label style={{ fontSize: 12.5, color: "var(--mut)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input type="checkbox" checked={hideLost} onChange={(e) => setHideLost(e.target.checked)} />
+            Hide lost leads
+          </label>
+        )}
+        <span style={{ fontSize: 12, color: "var(--mut)" }}>{visible.length} of {leads.length} lead{leads.length === 1 ? "" : "s"}</span>
+      </div>
+
+      <div className="dk-card" style={{ marginTop: 12, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 780 }}>
           <thead>
             <tr style={{ textAlign: "left", color: "var(--mut)", fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em" }}>
-              {["Lead", "Scope", "Their budget", "Expected revenue", "Owner", "Source", "When", "Stage"].map((h) => (
-                <th key={h} style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>{h}</th>
-              ))}
+              <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>Lead</th>
+              <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>Scope</th>
+              <SortHeader label="Their budget" sortKey="budget" sort={sort} setSort={setSort} />
+              <SortHeader label="Expected revenue" sortKey="revenue" sort={sort} setSort={setSort} />
+              <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>Owner</th>
+              <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>Source</th>
+              <SortHeader label="When" sortKey="when" sort={sort} setSort={setSort} />
+              <SortHeader label="Stage" sortKey="stage" sort={sort} setSort={setSort} />
+              <SortHeader label="Priority" sortKey="priority" sort={sort} setSort={setSort} />
+              <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}></th>
             </tr>
           </thead>
           <tbody>
-            {leads.map((l) => (
+            {visible.map((l) => (
               <tr key={l.id} className="dk-row" style={{ borderBottom: "1px solid var(--line)", cursor: "pointer" }} onClick={() => navigate(`/admin/leads/${l.id}`)}>
                 <td style={{ padding: "11px 16px", display: "flex", gap: 10, alignItems: "center" }}>
                   <Avatar name={l.name} />
@@ -93,11 +236,18 @@ export default function Leads() {
                 <td style={{ padding: "11px 16px" }}>{formatINR(l.statedBudgetPaise)}</td>
                 <td style={{ padding: "11px 16px" }}>{formatINR(l.expectedRevenuePaise)}</td>
                 <td style={{ padding: "11px 16px", fontSize: 12.5, color: "var(--mut)" }}>{l.leadOwner || "—"}</td>
-                <td style={{ padding: "11px 16px", fontSize: 12.5, color: "var(--mut)" }}>{l.source.replace("-", " ")}</td>
+                <td style={{ padding: "11px 16px", fontSize: 12.5, color: "var(--mut)" }}>{SOURCE_LABEL[l.source] || l.source.replace("-", " ")}</td>
                 <td style={{ padding: "11px 16px", fontSize: 12.5, color: "var(--mut)" }}>{formatDate(l.createdAt)}</td>
                 <td style={{ padding: "11px 16px" }}><Chip status={l.status} /></td>
+                <td style={{ padding: "11px 16px" }}><Chip status={l.priority} /></td>
+                <td style={{ padding: "11px 16px" }}>
+                  <span style={{ color: "var(--bad)", fontSize: 12.5, cursor: "pointer" }} onClick={(e) => removeLead(l, e)}>Delete</span>
+                </td>
               </tr>
             ))}
+            {visible.length === 0 && (
+              <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "var(--mut)", fontSize: 13 }}>No leads match this filter.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

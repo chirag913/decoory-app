@@ -138,7 +138,11 @@ CREATE TABLE IF NOT EXISTS leads (
 );
 
 -- Append-only interaction history for a lead — see services/leads.js's
--- logActivity(). No route exposes update/delete for this table by design.
+-- logActivity(). Content (type/note/created_at) is immutable and no route
+-- ever edits or deletes a row; the only mutation allowed is toggling
+-- voided_at/voided_by (a soft "this entry was a mistake" flag), which keeps
+-- the row for audit purposes but excludes it from things like Quotation
+-- History and greys it out in the timeline.
 CREATE TABLE IF NOT EXISTS lead_activities (
   id          TEXT PRIMARY KEY,
   lead_id     TEXT NOT NULL REFERENCES leads(id),
@@ -149,7 +153,9 @@ CREATE TABLE IF NOT EXISTS lead_activities (
               )),
   note        TEXT,
   created_by  TEXT,                                  -- admin display name at time of logging
-  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  voided_at   TEXT,
+  voided_by   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (

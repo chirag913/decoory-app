@@ -165,7 +165,7 @@ export default function LeadDetail() {
     );
   }
 
-  const quotationHistory = (activities || []).filter((a) => a.type === "quotation_sent");
+  const quotationHistory = (activities || []).filter((a) => a.type === "quotation_sent" && !a.voidedAt);
   const followUpUpcoming = lead.followUpAt && lead.followUpAt.slice(0, 10) >= new Date().toISOString().slice(0, 10);
   const visitUpcoming = lead.siteVisitAt && lead.siteVisitAt.slice(0, 10) >= new Date().toISOString().slice(0, 10);
 
@@ -284,6 +284,10 @@ export default function LeadDetail() {
             onAdd={async (type, note) => {
               const res = await api.post(`/leads/${id}/activities`, { type, note });
               setLead(res.lead);
+              await loadActivities();
+            }}
+            onVoid={async (activity) => {
+              await api.post(`/leads/${id}/activities/${activity.id}/void`, {});
               await loadActivities();
             }}
           />

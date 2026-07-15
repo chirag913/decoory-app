@@ -77,6 +77,22 @@ router.post("/:id/activities", requireAuth, requireRole("admin"), (req, res) => 
   res.status(201).json({ activity: S.leadActivity(activity), lead: S.lead(db.prepare("SELECT * FROM leads WHERE id = ?").get(lead.id)) });
 });
 
+// Soft-void toggle: the only mutation ever allowed on an activity row. Never
+// touches type/note/created_at, so the timeline stays a true history — a
+// voided entry is still there, just excluded from things like Quotation
+// History and shown greyed-out. Toggles based on current state so a misclick
+// can be undone.
+router.post("/:id/activities/:activityId/void", requireAuth, requireRole("admin"), (req, res) => {
+  const activity = db.prepare("SELECT * FROM lead_activities WHERE id = ? AND lead_id = ?").get(req.params.activityId, req.params.id);
+  if (!activity) return res.status(404).json({ error: "Activity not found" });
+  if (activity.voided_at) {
+    db.prepare("UPDATE lead_activities SET voided_at = NULL, voided_by = NULL WHERE id = ?").run(activity.id);
+  } else {
+    db.prepare("UPDATE lead_activities SET voided_at = ?, voided_by = ? WHERE id = ?").run(new Date().toISOString(), req.user.name, activity.id);
+  }
+  res.json({ activity: S.leadActivity(db.prepare("SELECT * FROM lead_activities WHERE id = ?").get(activity.id)) });
+});
+
 // A full name's last word, for the auto-generated project name convention
 // ("Rakesh Sharma" -> "Sharma Residence") — matches the existing seed data.
 function surname(name) {
@@ -103,8 +119,13 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
   if (!row) return res.status(404).json({ error: "Lead not found" });
   const {
     status, name, phone, whatsapp, email, address, city, scope, statedBudgetPaise,
-    priority, interestLevel, leadOwner, requirements, notes, tags, expectedRevenuePaise, followUpAt, siteVisitAt,
+    priority, interestLevel, leadOwner, requirements, notes, tags, expectedRevenuePaise, followUpAt, siteVisitAt, source,
   } = req.body;
+
+  const VALID_SOURCES = ["self-estimation", "design-upload", "manual", "facebook", "google", "referral", "website"];
+  if (source !== undefined && !VALID_SOURCES.includes(source)) {
+    return res.status(400).json({ error: `source must be one of: ${VALID_SOURCES.join(", ")}` });
+  }
 
   // Validate + create the project BEFORE touching the lead row, so a failed
   // conversion (missing phone/budget) leaves the lead completely unchanged
@@ -137,6 +158,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
     UPDATE leads SET
       status = COALESCE(@status, status), name = COALESCE(@name, name),
       city = COALESCE(@city, city), phone = COALESCE(@phone, phone), scope = COALESCE(@scope, scope),
+      source = COALESCE(@source, source),
       whatsapp = CASE WHEN @whatsapp IS NULL THEN whatsapp ELSE NULLIF(@whatsapp, '') END,
       email = CASE WHEN @email IS NULL THEN email ELSE NULLIF(@email, '') END,
       address = CASE WHEN @address IS NULL THEN address ELSE NULLIF(@address, '') END,
@@ -153,7 +175,7 @@ router.patch("/:id", requireAuth, requireRole("admin"), (req, res) => {
       converted_project_id = COALESCE(@convertedProjectId, converted_project_id)
     WHERE id = @id
   `).run(normalizeParams({
-    id: row.id, status, name, city, phone, whatsapp, email, address, scope, statedBudgetPaise,
+    id: row.id, status, name, city, phone, whatsapp, email, address, scope, source, statedBudgetPaise,
     priority, interestLevel, leadOwner, requirements, notes,
     tags: tags !== undefined ? JSON.stringify(tags) : null,
     expectedRevenuePaise, followUpAt, siteVisitAt,

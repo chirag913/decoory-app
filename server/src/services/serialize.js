@@ -142,6 +142,8 @@ export function leadActivity(row) {
     note: row.note,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    voidedAt: row.voided_at,
+    voidedBy: row.voided_by,
   };
 }
 
