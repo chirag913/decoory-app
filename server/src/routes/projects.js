@@ -234,6 +234,7 @@ router.delete("/:id", requireAuth, requireRole("admin"), (req, res) => {
     db.prepare("DELETE FROM materials WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM suggestions WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM messages WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM calendar_events WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
   });
   del(project.id);

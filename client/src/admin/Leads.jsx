@@ -140,6 +140,8 @@ export default function Leads() {
   const [hideLost, setHideLost] = useState(true);
   const [stageFilter, setStageFilter] = useState("all");
   const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const [selected, setSelected] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = () => api.get("/leads").then(({ leads }) => setLeads(leads));
   useEffect(() => { load(); }, []);
@@ -149,6 +151,28 @@ export default function Leads() {
     if (!window.confirm(`Delete the lead for ${l.name}? This cannot be undone.`)) return;
     await api.del(`/leads/${l.id}`);
     load();
+  };
+
+  const toggleSelect = (id, e) => {
+    e.stopPropagation();
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkDelete = async () => {
+    if (!selected.size) return;
+    if (!window.confirm(`Delete ${selected.size} selected lead${selected.size === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all([...selected].map((id) => api.del(`/leads/${id}`)));
+    } finally {
+      setBulkDeleting(false);
+      setSelected(new Set());
+      load();
+    }
   };
 
   const visible = useMemo(() => {
@@ -203,12 +227,28 @@ export default function Leads() {
           </label>
         )}
         <span style={{ fontSize: 12, color: "var(--mut)" }}>{visible.length} of {leads.length} lead{leads.length === 1 ? "" : "s"}</span>
+        {selected.size > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <span style={{ fontSize: 12.5, color: "var(--mut)" }}>{selected.size} selected</span>
+            <button className="dk-btn" style={{ background: "var(--bad)" }} disabled={bulkDeleting} onClick={bulkDelete}>
+              {bulkDeleting ? "Deleting…" : `Delete ${selected.size}`}
+            </button>
+            <span style={{ fontSize: 12, color: "var(--mut)", cursor: "pointer" }} onClick={() => setSelected(new Set())}>Clear</span>
+          </div>
+        )}
       </div>
 
       <div className="dk-card" style={{ marginTop: 12, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, minWidth: 780 }}>
           <thead>
             <tr style={{ textAlign: "left", color: "var(--mut)", fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em" }}>
+              <th style={{ padding: "12px 8px 12px 16px", borderBottom: "1px solid var(--line)", width: 20 }}>
+                <input
+                  type="checkbox"
+                  checked={visible.length > 0 && visible.every((l) => selected.has(l.id))}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(visible.map((l) => l.id)) : new Set())}
+                />
+              </th>
               <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>Lead</th>
               <th style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 700 }}>Scope</th>
               <SortHeader label="Their budget" sortKey="budget" sort={sort} setSort={setSort} />
@@ -223,7 +263,10 @@ export default function Leads() {
           </thead>
           <tbody>
             {visible.map((l) => (
-              <tr key={l.id} className="dk-row" style={{ borderBottom: "1px solid var(--line)", cursor: "pointer" }} onClick={() => navigate(`/admin/leads/${l.id}`)}>
+              <tr key={l.id} className="dk-row" style={{ borderBottom: "1px solid var(--line)", cursor: "pointer", background: selected.has(l.id) ? "var(--brass-soft)" : undefined }} onClick={() => navigate(`/admin/leads/${l.id}`)}>
+                <td style={{ padding: "11px 8px 11px 16px" }}>
+                  <input type="checkbox" checked={selected.has(l.id)} onChange={(e) => toggleSelect(l.id, e)} onClick={(e) => e.stopPropagation()} />
+                </td>
                 <td style={{ padding: "11px 16px", display: "flex", gap: 10, alignItems: "center" }}>
                   <Avatar name={l.name} />
                   <div>
@@ -246,7 +289,7 @@ export default function Leads() {
               </tr>
             ))}
             {visible.length === 0 && (
-              <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "var(--mut)", fontSize: 13 }}>No leads match this filter.</td></tr>
+              <tr><td colSpan={11} style={{ padding: 24, textAlign: "center", color: "var(--mut)", fontSize: 13 }}>No leads match this filter.</td></tr>
             )}
           </tbody>
         </table>
