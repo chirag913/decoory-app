@@ -282,6 +282,7 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcom
       </div>
 
       <div onClick={onOpen} style={{ fontSize: 14.5, fontWeight: 700, marginTop: 3, cursor: "pointer" }}>{lead.name}</div>
+      <div style={{ fontSize: 11.5, color: "var(--mut)", marginTop: 1 }}>{lead.phone || "No phone"}</div>
       <div className="serif" style={{ fontSize: 21, fontWeight: 600, marginTop: 4 }}>{formatINR(lead.statedBudgetPaise)}</div>
       <div style={{ fontSize: 12, color: "var(--mut)", marginTop: 2 }}>{lead.scope || "—"} · {SOURCE_LABEL[lead.source] || lead.source}</div>
 
