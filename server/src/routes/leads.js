@@ -318,7 +318,7 @@ router.post("/:id/call-outcome", requireAuth, requireRole("admin"), (req, res) =
     case "call-back-later": {
       const { reason, date, time } = f;
       if (!date) return res.status(400).json({ error: "date is required" });
-      patch.follow_up_at = time ? `${date}T${time}:00.000Z` : date;
+      patch.follow_up_at = time ? new Date(`${date}T${time}:00+05:30`).toISOString() : date;
       advanceStage();
       activityNote = reason ? `Call back later — ${reason}` : "Call back later";
       break;
@@ -333,7 +333,7 @@ router.post("/:id/call-outcome", requireAuth, requireRole("admin"), (req, res) =
       const { visitDate, visitTime, assignedStaff, address, notes } = f;
       if (!visitDate) return res.status(400).json({ error: "visitDate is required" });
       patch.status = "visit-scheduled";
-      patch.site_visit_at = visitTime ? `${visitDate}T${visitTime}:00.000Z` : visitDate;
+      patch.site_visit_at = visitTime ? new Date(`${visitDate}T${visitTime}:00+05:30`).toISOString() : visitDate;
       if (address) patch.address = address;
       if (assignedStaff) patch.lead_owner = assignedStaff;
       activityType = "visit_scheduled";

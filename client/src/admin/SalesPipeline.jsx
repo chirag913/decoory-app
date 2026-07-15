@@ -235,12 +235,15 @@ function SnoozedLeads({ leads, navigate }) {
   );
 }
 
-function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcome, onWhatsapp, onScheduleVisit, onVisitCompleted, onQuotation, onNegotiation, onRecordAdvance, onSnooze }) {
+function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcome, onWhatsapp, onScheduleVisit, onVisitCompleted, onQuotation, onNegotiation, onRecordAdvance, onSnooze, onSetNote, onSetCallTime, onToggleUrgent }) {
   const [hovered, setHovered] = useState(false);
   const [popover, setPopover] = useState(null);
   const [visitDate, setVisitDate] = useState("");
   const [snoozeDate, setSnoozeDate] = useState("");
   const [snoozeReason, setSnoozeReasonText] = useState("");
+  const [noteText, setNoteText] = useState(lead.notes || "");
+  const [callDate, setCallDate] = useState("");
+  const [callTime, setCallTime] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [quoteFollowUp, setQuoteFollowUp] = useState("tomorrow");
   const [vcRequirements, setVcRequirements] = useState(lead.requirements || "");
@@ -257,6 +260,14 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcom
   const action = nextAction(lead);
   const badge = overdueBadge(lead);
   const priorityColor = lead.priority === "high" ? "var(--bad)" : lead.priority === "low" ? "var(--line)" : "var(--warn)";
+  const isUrgent = lead.priority === "high";
+  // A follow-up with a real time component (not just a bare date) means
+  // someone asked to be called at a specific time — show that literally
+  // instead of the generic "Follow-up" next-action label.
+  const hasCallTime = lead.followUpAt && lead.followUpAt.length > 10;
+  const callTimeLabel = hasCallTime
+    ? new Date(lead.followUpAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })
+    : null;
 
   const actionKeys = lead.status === "visit-scheduled" ? ["visit-completed"]
     : ["visit-completed", "quotation-pending"].includes(lead.status) ? ["quotation"]
@@ -276,9 +287,12 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcom
       className="dk-card"
       style={{ padding: 13, marginBottom: 10, cursor: "grab", opacity: dragging ? 0.4 : 1, userSelect: "none", borderLeft: `4px solid ${priorityColor}` }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 6, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10, color: "var(--mut)", fontWeight: 700 }}>{lead.leadCode}</span>
-        {badge && <span className="dk-chip" style={{ background: badge.bg, color: badge.fg, fontSize: 9.5, padding: "2px 7px" }}>{badge.icon} {badge.label}</span>}
+        <div style={{ display: "flex", gap: 4 }}>
+          {isUrgent && <span className="dk-chip" style={{ background: "var(--bad)", color: "#fff", fontSize: 9.5, padding: "2px 7px" }}>🚨 URGENT</span>}
+          {badge && <span className="dk-chip" style={{ background: badge.bg, color: badge.fg, fontSize: 9.5, padding: "2px 7px" }}>{badge.icon} {badge.label}</span>}
+        </div>
       </div>
 
       <div onClick={onOpen} style={{ fontSize: 14.5, fontWeight: 700, marginTop: 3, cursor: "pointer" }}>{lead.name}</div>
@@ -291,9 +305,19 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcom
         <span style={{ fontSize: 11.5, color: "var(--mut)" }}>👤 {lead.leadOwner || "Unassigned"}</span>
       </div>
 
+      {callTimeLabel && (
+        <div style={{ marginTop: 6, fontSize: 11.5, color: "var(--bad)", fontWeight: 700 }}>📞 Call: {callTimeLabel}</div>
+      )}
+
       {action && (
         <div style={{ marginTop: 9, padding: "7px 9px", borderRadius: 8, background: "var(--brass-soft)", color: "var(--brass)", fontSize: 12, fontWeight: 700, textAlign: "center" }}>
           {action.icon} {action.label}
+        </div>
+      )}
+
+      {lead.notes && (
+        <div style={{ marginTop: 8, padding: "6px 8px", borderRadius: 6, background: "var(--paper)", fontSize: 11, color: "var(--ink)", fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={lead.notes}>
+          📝 {lead.notes}
         </div>
       )}
 
@@ -307,7 +331,26 @@ function LeadCard({ lead, dragging, onDragStart, onDragEnd, onOpen, onCallOutcom
           {actionKeys.includes("negotiation") && <button title="Log Negotiation" onClick={(e) => { e.stopPropagation(); setPopover("negotiation"); }} style={ICON_BTN}>🤝</button>}
           {actionKeys.includes("advance") && <button title="Record Advance" onClick={(e) => { e.stopPropagation(); setPopover("advance"); }} style={ICON_BTN}>💰</button>}
           <button title={isSnoozed(lead) ? "Un-snooze" : "Snooze Lead"} onClick={(e) => { e.stopPropagation(); setPopover("snooze"); }} style={ICON_BTN}>😴</button>
+          <button title="Add Note" onClick={(e) => { e.stopPropagation(); setPopover("note"); }} style={ICON_BTN}>📝</button>
+          <button title="Call at specific time" onClick={(e) => { e.stopPropagation(); setPopover("calltime"); }} style={ICON_BTN}>⏰</button>
+          <button title={isUrgent ? "Unmark Urgent" : "Mark Urgent"} onClick={(e) => { e.stopPropagation(); onToggleUrgent(lead); }} style={{ ...ICON_BTN, background: isUrgent ? "var(--bad)" : ICON_BTN.background, color: isUrgent ? "#fff" : undefined }}>🚨</button>
           <button title="Open Lead" onClick={(e) => { e.stopPropagation(); onOpen(); }} style={ICON_BTN}>↗</button>
+        </div>
+      )}
+
+      {popover === "note" && (
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+          <textarea className="dk-textarea" style={{ fontSize: 11.5, minHeight: 50 }} placeholder="e.g. Call back after 6 PM, prefers WhatsApp…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { onSetNote(lead, noteText); close(); }}>Save Note</button>
+        </div>
+      )}
+
+      {popover === "calltime" && (
+        <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 9, borderTop: "1px solid var(--line)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+          <div style={{ fontSize: 10.5, color: "var(--mut)" }}>Call back at a specific date & time:</div>
+          <input className="dk-input" type="date" style={{ fontSize: 11.5, padding: "5px 7px" }} value={callDate} onChange={(e) => setCallDate(e.target.value)} />
+          <input className="dk-input" type="time" style={{ fontSize: 11.5, padding: "5px 7px" }} value={callTime} onChange={(e) => setCallTime(e.target.value)} />
+          <button className="dk-btn" style={{ fontSize: 11, padding: "5px 8px" }} onClick={() => { if (callDate && callTime) { onSetCallTime(lead, callDate, callTime); close(); setCallDate(""); setCallTime(""); } }}>Set</button>
         </div>
       )}
 
@@ -449,6 +492,27 @@ export default function SalesPipeline() {
     load();
   };
 
+  const setLeadNote = async (lead, note) => {
+    await api.patch(`/leads/${lead.id}`, { notes: note || "" });
+    load();
+  };
+
+  const setCallTime = async (lead, date, time) => {
+    // The date/time inputs are entered in IST (the business runs on
+    // Asia/Kolkata — see services/scheduler.js) — anchor to that offset so
+    // the stored UTC instant round-trips back to the same time shown here.
+    const followUpAt = new Date(`${date}T${time}:00+05:30`).toISOString();
+    await api.patch(`/leads/${lead.id}`, { followUpAt });
+    const label = new Date(followUpAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
+    await api.post(`/leads/${lead.id}/activities`, { type: "follow_up", note: `Call requested at ${label}` });
+    load();
+  };
+
+  const toggleUrgent = async (lead) => {
+    await api.patch(`/leads/${lead.id}`, { priority: lead.priority === "high" ? "medium" : "high" });
+    load();
+  };
+
   const logWhatsapp = (lead) => {
     window.open(whatsappLeadLink({ leadName: lead.name, phone: lead.whatsapp || lead.phone }), "_blank");
     api.post(`/leads/${lead.id}/activities`, { type: "whatsapp_sent", note: "Opened WhatsApp via Sales Pipeline quick action" }).then(load).catch(() => {});
@@ -566,35 +630,41 @@ export default function SalesPipeline() {
               onDrop={(e) => { e.preventDefault(); drop(stage.key); }}
               style={{
                 flex: "0 0 305px", background: dragOverStage === stage.key ? "var(--brass-soft)" : "#FBFAF6",
-                borderRadius: 12, padding: 10, minHeight: 200, border: "1px solid var(--line)",
+                borderRadius: 12, padding: 10, border: "1px solid var(--line)",
+                display: "flex", flexDirection: "column", maxHeight: 620,
               }}
             >
-              <div style={{ padding: "2px 4px 10px" }}>
+              <div style={{ padding: "2px 4px 10px", flexShrink: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, fontWeight: 700 }}>{stage.label}</span>
                   <span className="dk-chip" style={{ background: "var(--card)", color: "var(--mut)" }}>{stageLeads.length}</span>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--mut)", marginTop: 2 }}>{stageLeads.length} Lead{stageLeads.length === 1 ? "" : "s"} · {formatINR(revenue)}</div>
               </div>
-              {stageLeads.length === 0 && (
-                <div style={{ fontSize: 12, color: "var(--mut)", padding: "16px 4px", textAlign: "center" }}>No leads in this stage.</div>
-              )}
-              {stageLeads.map((lead) => (
-                <LeadCard
-                  key={lead.id} lead={lead} dragging={draggingId === lead.id}
-                  onDragStart={(e) => { e.dataTransfer.setData("text/plain", lead.id); e.dataTransfer.effectAllowed = "move"; setDraggingId(lead.id); }}
-                  onDragEnd={() => setDraggingId(null)}
-                  onOpen={() => navigate(`/admin/leads/${lead.id}`)}
-                  onCallOutcome={setCallOutcomeLead}
-                  onWhatsapp={logWhatsapp}
-                  onScheduleVisit={scheduleVisit}
-                  onVisitCompleted={visitCompleted}
-                  onQuotation={sendQuotation}
-                  onNegotiation={logNegotiation}
-                  onRecordAdvance={recordAdvance}
-                  onSnooze={toggleSnooze}
-                />
-              ))}
+              <div style={{ overflowY: "auto", flex: 1, minHeight: 60 }}>
+                {stageLeads.length === 0 && (
+                  <div style={{ fontSize: 12, color: "var(--mut)", padding: "16px 4px", textAlign: "center" }}>No leads in this stage.</div>
+                )}
+                {stageLeads.map((lead) => (
+                  <LeadCard
+                    key={lead.id} lead={lead} dragging={draggingId === lead.id}
+                    onDragStart={(e) => { e.dataTransfer.setData("text/plain", lead.id); e.dataTransfer.effectAllowed = "move"; setDraggingId(lead.id); }}
+                    onDragEnd={() => setDraggingId(null)}
+                    onOpen={() => navigate(`/admin/leads/${lead.id}`)}
+                    onCallOutcome={setCallOutcomeLead}
+                    onWhatsapp={logWhatsapp}
+                    onScheduleVisit={scheduleVisit}
+                    onVisitCompleted={visitCompleted}
+                    onQuotation={sendQuotation}
+                    onNegotiation={logNegotiation}
+                    onRecordAdvance={recordAdvance}
+                    onSnooze={toggleSnooze}
+                    onSetNote={setLeadNote}
+                    onSetCallTime={setCallTime}
+                    onToggleUrgent={toggleUrgent}
+                  />
+                ))}
+              </div>
             </div>
           );
         })}
