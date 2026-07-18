@@ -28,6 +28,7 @@ const NAV = [
   ["clients", "☺", "Customers"],
   ["payments", "₹", "Payments"],
   ["team", "⚒", "Team"],
+  ["documents", "❐", "Documents"],
   ["reports", "▨", "Reports"],
 ];
 

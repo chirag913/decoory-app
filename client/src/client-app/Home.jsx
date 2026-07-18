@@ -50,8 +50,8 @@ export default function Home({ project, onProjectChange }) {
           <div className="serif" style={{ fontSize: 23, fontWeight: 600 }}>{greeting()}, {greetName} {greetEmoji}</div>
         </div>
         <div style={{ display: "flex", gap: 14 }}>
-          <span onClick={() => navigate("callback")} title="Request a callback" style={{ cursor: "pointer", fontSize: 20 }}>📞</span>
-          <span onClick={() => navigate("chat")} style={{ position: "relative", cursor: "pointer", fontSize: 20 }}>
+          <span onClick={() => navigate("/app/callback")} title="Request a callback" style={{ cursor: "pointer", fontSize: 20 }}>📞</span>
+          <span onClick={() => navigate("/app/chat")} style={{ position: "relative", cursor: "pointer", fontSize: 20 }}>
             💬{hasUnreadChat && <span style={{ position: "absolute", top: -3, right: -5, width: 9, height: 9, background: "var(--bad)", borderRadius: "50%" }} />}
           </span>
         </div>
@@ -83,7 +83,7 @@ export default function Home({ project, onProjectChange }) {
       )}
 
       {latestUpdate && (
-        <div className="ca-card" style={{ padding: 14, marginTop: 12, cursor: "pointer" }} onClick={() => navigate("updates")}>
+        <div className="ca-card" style={{ padding: 14, marginTop: 12, cursor: "pointer" }} onClick={() => navigate("/app/updates")}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span className="ca-eyebrow">Latest site update</span>
             <span style={{ fontSize: 12, color: "var(--brass)", fontWeight: 700 }}>View all →</span>
@@ -104,7 +104,7 @@ export default function Home({ project, onProjectChange }) {
               <div style={{ fontSize: 13.5, fontWeight: 700 }}>{duePayment.label}</div>
               <div style={{ fontSize: 12, color: "var(--mut)" }}>{formatINR(duePayment.amountPaise)} · due {formatDate(duePayment.dueAt)}</div>
             </div>
-            <button className="ca-btn" style={{ width: "auto", padding: "9px 18px" }} onClick={() => navigate("payments")}>Pay now</button>
+            <button className="ca-btn" style={{ width: "auto", padding: "9px 18px" }} onClick={() => navigate("/app/payments")}>Pay now</button>
           </div>
         </div>
       )}
