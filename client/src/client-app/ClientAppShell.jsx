@@ -9,6 +9,7 @@ import Payments from "./Payments.jsx";
 import Team from "./Team.jsx";
 import More from "./More.jsx";
 import Chat from "./Chat.jsx";
+import RequestCallback from "./RequestCallback.jsx";
 
 const TABS = [
   [".", "⌂", "Home"],
@@ -56,6 +57,7 @@ export default function ClientAppShell() {
           <Route path="team" element={<Team project={project} />} />
           <Route path="more" element={<More project={project} />} />
           <Route path="chat" element={<Chat project={project} />} />
+          <Route path="callback" element={<RequestCallback project={project} />} />
         </Routes>
       </div>
       <nav className="ca-tabbar">

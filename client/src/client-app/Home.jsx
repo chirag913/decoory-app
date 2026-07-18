@@ -49,9 +49,12 @@ export default function Home({ project, onProjectChange }) {
           <div className="ca-eyebrow">{today}</div>
           <div className="serif" style={{ fontSize: 23, fontWeight: 600 }}>{greeting()}, {greetName} {greetEmoji}</div>
         </div>
-        <span onClick={() => navigate("chat")} style={{ position: "relative", cursor: "pointer", fontSize: 20 }}>
-          💬{hasUnreadChat && <span style={{ position: "absolute", top: -3, right: -5, width: 9, height: 9, background: "var(--bad)", borderRadius: "50%" }} />}
-        </span>
+        <div style={{ display: "flex", gap: 14 }}>
+          <span onClick={() => navigate("callback")} title="Request a callback" style={{ cursor: "pointer", fontSize: 20 }}>📞</span>
+          <span onClick={() => navigate("chat")} style={{ position: "relative", cursor: "pointer", fontSize: 20 }}>
+            💬{hasUnreadChat && <span style={{ position: "absolute", top: -3, right: -5, width: 9, height: 9, background: "var(--bad)", borderRadius: "50%" }} />}
+          </span>
+        </div>
       </div>
 
       <div className="ca-card" style={{ padding: 16, background: "var(--ink)", color: "#EDEAE0", border: "none" }}>

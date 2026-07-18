@@ -29,3 +29,12 @@ export function whatsappLeadLink({ leadName, phone }) {
   const text = `Hi ${leadName}, this is Decoory Interior's. `;
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
+
+// Client app's "Request a Callback" — after booking a slot in-app, this
+// gives the client an optional one-tap way to also flag it on WhatsApp
+// (the in-app request already notifies admins; this is just belt-and-braces
+// since the client asked specifically for a WhatsApp confirmation too).
+export function whatsappCallbackLink({ clientName, projectName, projectCode, label }) {
+  const text = `Hi Decoory team, this is ${clientName}. I've requested a callback for ${label} regarding ${projectName} (${projectCode}). Please call me then!`;
+  return `https://wa.me/${DECOORY_WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
+}

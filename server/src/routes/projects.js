@@ -2,7 +2,7 @@ import { Router } from "express";
 import { v4 as uuid } from "uuid";
 import db from "../db/index.js";
 import { requireAuth, requireRole, loadOwnProject } from "../middleware/auth.js";
-import { notify } from "../services/notify.js";
+import { notify, notifyAllAdmins } from "../services/notify.js";
 import { recomputeProgress } from "../services/progress.js";
 import { createProjectForClient, ApiError } from "../services/projects.js";
 import { createLead } from "../services/leads.js";
@@ -211,6 +211,45 @@ router.post("/:id/messages", requireAuth, (req, res) => {
     notify(project.client_user_id, { title: "New message from Decoory Team", body: text || "Sent an attachment", type: "chat", data: { projectId: project.id } });
   }
   res.status(201).json({ message: S.message(db.prepare("SELECT * FROM messages WHERE id = ?").get(id)) });
+});
+
+// Client-facing "Request a Callback" — replaces the old pattern of the sales
+// team just calling whenever, with the client picking their own slot.
+// Business hours are IST 10:00-18:00 (last bookable hour is 18:00, leaving a
+// buffer before the 19:00 cutoff); same-day requests need a 2-hour lead
+// time. Validated here too, not just client-side, since anyone with the
+// project's own login could otherwise POST an out-of-window time directly.
+router.post("/:id/callback-request", requireAuth, (req, res) => {
+  const project = getProjectOr404(req, res);
+  if (!project) return;
+  const { date, time } = req.body || {};
+  if (!date || !time) return res.status(400).json({ error: "date and time are required" });
+
+  const requested = new Date(`${date}T${time}:00+05:30`);
+  if (isNaN(requested.getTime())) return res.status(400).json({ error: "Invalid date/time" });
+
+  const requestedIstHour = new Date(requested.getTime() + 5.5 * 3600000).getUTCHours();
+  if (requestedIstHour < 10 || requestedIstHour >= 19) {
+    return res.status(400).json({ error: "Callback times are only available between 10 AM and 7 PM" });
+  }
+  if (requested.getTime() < Date.now() + 2 * 3600000) {
+    return res.status(400).json({ error: "Please choose a time at least 2 hours from now" });
+  }
+
+  const label = requested.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true });
+
+  const msgId = uuid();
+  db.prepare("INSERT INTO messages (id, project_id, sender_user_id, sender_label, text) VALUES (?,?,?,?,?)")
+    .run(msgId, project.id, req.user.id, null, `📞 Requested a callback for ${label}`);
+
+  notifyAllAdmins({
+    title: `${req.user.name} requested a callback`,
+    body: `${label} — ${project.name} (${project.code})`,
+    type: "callback_request",
+    data: { projectId: project.id, requestedAt: requested.toISOString() },
+  });
+
+  res.status(201).json({ requestedAt: requested.toISOString(), label });
 });
 
 // Deletes a project and everything scoped to it. Does NOT delete the
