@@ -3,42 +3,24 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { SectionTitle, Spinner } from "../shared/ui.jsx";
-import { MATERIAL_COLORS } from "../shared/ui.jsx";
 
 export default function More({ project }) {
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const [materials, setMaterials] = useState(null);
   const [documents, setDocuments] = useState(null);
   const [open, setOpen] = useState(null);
 
   useEffect(() => {
-    Promise.all([
-      api.get(`/projects/${project.id}/materials`),
-      api.get("/documents"),
-    ]).then(([m, d]) => { setMaterials(m.materials); setDocuments(d.documents); });
+    api.get("/documents").then((d) => setDocuments(d.documents));
   }, [project.id]);
 
-  if (!materials || !documents) return <Spinner />;
+  if (!documents) return <Spinner />;
 
   const usp = documents.find((d) => d.key === "usp");
   const terms = documents.filter((d) => d.key !== "usp");
 
   return (
     <div>
-      <SectionTitle eyebrow="Materials in your home" title="Brands we're using" />
-      {materials.map((b) => (
-        <div key={b.id} className="ca-card" style={{ padding: 14, marginBottom: 10, display: "flex", gap: 12, alignItems: "center" }}>
-          <span style={{ width: 40, height: 40, borderRadius: 10, background: MATERIAL_COLORS[b.brand] || "#999", flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700 }}>{b.brand}</div>
-            <div style={{ fontSize: 12, color: "var(--mut)" }}>{b.usedFor}</div>
-          </div>
-          {b.tagline && <span className="ca-chip" style={{ background: "var(--brass-soft)", color: "var(--brass)" }}>{b.tagline}</span>}
-        </div>
-      ))}
-
-      <div style={{ height: 8 }} />
       <SectionTitle eyebrow="Why Decoory" title="Our promise" />
       <div className="ca-card" style={{ padding: 14, marginBottom: 14 }}>
         {(usp?.body || []).map((u) => (
