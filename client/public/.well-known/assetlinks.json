@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.decoory.client",
+      "sha256_cert_fingerprints": [
+        "DE:7E:A1:8C:7A:0A:3F:26:0A:FC:97:A1:BF:02:F2:74:0F:CE:3A:ED:D0:6C:F9:98:0F:3B:88:BC:87:20:B4:9E"
+      ]
+    }
+  }
+]

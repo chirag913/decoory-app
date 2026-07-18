@@ -10,3 +10,8 @@ dist/
 build/
 .DS_Store
 *.log
+android-client-app/.gradle/
+android-client-app/*.apk
+android-client-app/*.aab
+android-client-app/*.keystore
+android-client-app/*.idsig
