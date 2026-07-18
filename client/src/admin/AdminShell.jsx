@@ -12,6 +12,7 @@ import AdminChat from "./AdminChat.jsx";
 import Documents from "./Documents.jsx";
 import Reports from "./Reports.jsx";
 import Calendar from "./Calendar.jsx";
+import NotificationBell from "./NotificationBell.jsx";
 
 // Architecture: Sales Pipeline (leads, pre-advance) and Projects (execution,
 // post-advance) are deliberately separate top-level sections now, not tabs
@@ -45,6 +46,8 @@ export default function AdminShell() {
             Admin
           </div>
         </div>
+        <NotificationBell />
+        <div style={{ height: 1, background: "#333B35", margin: "8px 12px" }} />
         {NAV.map(([path, icon, label]) => (
           <NavLink key={label} to={path} end={path === "."} className={({ isActive }) => `dk-nav ${isActive ? "on" : ""}`}>
             <span style={{ width: 18, textAlign: "center" }}>{icon}</span><span className="lbl">{label}</span>
